@@ -1,0 +1,26 @@
+{
+  "name": "jsk13k-physics",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "serve": "vite dev",
+    "preview": "vite preview",
+    "build": "vite build --base=./"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.13.1",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "2Dphysics": "github:xem/2Dphysics",
+    "vite": "^8.2.1"
+  }
+}

@@ -1,0 +1,42 @@
+<html>
+<head>
+	<style>
+		body {
+			background: #111;
+			margin: 0;
+			font-family: Verdana, sans-serif;
+			font-size: calc(12px + 1vmin);
+		}
+		canvas {
+			border: solid 1px black;
+		}
+		b {
+			display: block;
+			padding: 0.5em 1em;
+			border-radius: 0.4em;
+			position: absolute;
+			background: #1116;
+			color: #f9f;
+			font-size: 50%;
+		}
+		#alt {
+			top: 2vh;
+			left: 40vw;
+		}
+		#th {
+			bottom: 2vh;
+			left: 10vw;
+		}
+		i {
+			font-family: 'Courier New', monospace;
+			font-size: 1rem;
+		}
+	</style>
+</head>
+<body>
+<canvas id=a></canvas>
+<b id=alt>Altitude: <i id=altn></i></b>
+<b id=th>Mode (Tab): <i id=elMode></i><br>Throttle (Shift, Ctrl, Z, X): <i id=thn></i></b>
+</body>
+<script type="module" src="./src/game.js"></script>
+</html>
