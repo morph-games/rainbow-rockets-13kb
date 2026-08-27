@@ -18,6 +18,8 @@
 			background: #1116;
 			color: #f9f;
 			font-size: 50%;
+			border: ridge .5vmin;
+			box-shadow: 0 0 1vmin #0005;
 		}
 		#alt {
 			top: 2vh;
@@ -36,7 +38,10 @@
 <body>
 <canvas id=a></canvas>
 <b id=alt>Altitude: <i id=altn></i></b>
-<b id=th>Mode (Tab): <i id=elMode></i><br>Throttle (Shift, Ctrl, Z, X): <i id=thn></i></b>
+<b id=th>
+	Mode (Tab): <i id=elMode></i><br>Throttle (Shift, Ctrl, Z, X): <i id=thn></i><br>
+	Speed: <i id=spdn></i>
+</b>
 </body>
 <script type="module" src="./src/game.js"></script>
 </html>

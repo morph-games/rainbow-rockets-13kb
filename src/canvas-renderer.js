@@ -2,6 +2,7 @@ import { colorToHex, clamp, X, Y, TWO_PI } from './utils.js';
 import { PLANET_RADIUS, ATMOS_RADIUS, PLANET_CENTER } from './planet.js';
 
 const c = a.getContext`2d`
+c.font = 'bold 50px Verdana';
 a.width = 800;
 a.height = 800;
 const rendW = a.width / 2, rendH = a.height / 2;
@@ -13,21 +14,36 @@ export const s2w=(x,y)=>[(x - rendW) / zoom + cam[X], (y - rendH) / zoom + cam[Y
 export const w2s=([x,y])=>[(x - cam[X]) * zoom + rendW, (y - cam[Y]) * zoom + rendH];
 
 export const setCam = camParam => cam = camParam;
-const setZoom = z => { zoom = clamp(z, 0.005, 2); console.log(zoom) };
+const setZoom = z => { zoom = clamp(z, 0.005, 2);
+	// console.log(zoom)
+};
 const ZOOM_SENSITIVITY = 0.0015;
 // event.deltaY is positive when scrolling down (zoom out), negative when scrolling up (zoom in)
 export const wheelZoom = deltaY => setZoom(zoom * Math.exp(-event.deltaY * ZOOM_SENSITIVITY));
 export const incZoom = n => setZoom(zoom + n);
 
-function drawCircle([x, y], r, color) {
+function drawCircle([x, y], r, color, filled = 1) {
 	c.beginPath();
-	c.fillStyle = color; // colorToHex(r, g, b, a);
-	c.arc(...w2s([x, y]), r, 0, 7);
-	c.fill();
+	if (filled) c.fillStyle = color; // colorToHex(r, g, b, a);
+	else c.strokeStyle = color;
+	c.arc(...w2s([x, y]), r * zoom, 0, 7);
+	if (filled) c.fill();
+	else c.stroke();
 	c.closePath();
 }
 
-export const draw = (sims, particles, trajectories, e, r) => {
+function drawText(text, pos, color, borderColor = '#fff', size = 18) {
+	c.font = `bold ${Math.round((size + size * zoom) / 2)}px Verdana`;
+	c.textAlign = 'center';
+	c.textBaseline = 'middle';
+	const [x, y] = w2s(pos);
+	c.fillStyle = color;
+	c.strokeStyle = borderColor;
+	c.strokeText(text, x, y);
+	c.fillText(text, x, y);
+}
+
+export const draw = (sims, particles, trajectories, missions, e, r) => {
 	// reset canvas
 	a.width ^= 0;
 
@@ -50,7 +66,7 @@ export const draw = (sims, particles, trajectories, e, r) => {
 		// draw shapes
 		for (e of sim.H) {
 			if (e.e >= 0) {
-				const color = sim.collisions[e.e] ? '#ccca' : e.d || '#fffc';
+				const color = sim.collisions?.[e.e] ? '#ccca' : e.d || '#fffc';
 				c.save(),
 				c.beginPath();
 				
@@ -94,6 +110,16 @@ export const draw = (sims, particles, trajectories, e, r) => {
 			c.closePath()
 		}
 	}
+	const now = new Date();
+	// drawText('🦄', cam);
+	missions.current().objectives.forEach(o => {
+		if (o.completed && now - o.completed > 3e3) return;
+		// if (o.completed - now < 1) console.log(o.completed - now);
+		// const a = o.completed ? clamp(255 - (now - o.completed)/1000, 0, 255) : 255;
+		const color = o.completed ? '#595' : '#955';
+		drawCircle(o.pos, o.r, color, 0);
+		if (zoom > .07) drawText(o.completed ? '✅' : o.description, o.pos, color);
+	});
 	trajectories.forEach(traj => traj.forEach(pos => {
 		drawCircle(pos, 5, '#fff2');
 	}));

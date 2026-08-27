@@ -7,7 +7,9 @@ import {
 	PLANET_RADIUS, PLANET_CENTER, PLANET_MASS,
 	setDampeningForPressure, calcAltitude, calcPlanetGravity,
 } from './planet.js';
-import { colorToHex, clamp, sin, cos, PI, X, Y, angle2Vector, distance, magnitude } from './utils.js';
+import { getCollisionsById } from './physics-extensions.js';
+import { setPos, subtractVectors, clamp, sin, cos, PI, X, Y, angle2Vector, distance, magnitude, TWO_PI, addVectors } from './utils.js';
+import { missions } from './missions.js';
 
 
 // aka. (v1, v2) => Math.hypot(v2[X] - v1[X], v2[Y] - v1[Y]);
@@ -63,22 +65,25 @@ const makeCompound = (shapeConfigArr, cx, cy) => {
 // u=r=d=l=0;
 // onkeydown=onkeyup=e=>this['lurd************************l**r************l*d***u**u'[e.which-37]]=e.type[5]
 
+const commandQueue = [];
 const ks = {}; // { u: 0, r: 0, d: 0, l: 0, S: 0 };
 const kt = {
 	'-': () => incZoom(-.1),
+	'=': () => incZoom(.1),
 	'+': () => incZoom(.1),
+	T: () => rocket.engineOn ^= 1, // Bitwise NOT operator to flip from 0 <-> 1
+	B: () => commandQueue.push('reset'),
 };
 onkeydown = onkeyup = e => {
-	ks['T******HC**************S****lurd************************l**r************q*d***u**u'[e.which-9]]=e.type[5]?1:0;
+	ks['BT******HC**************S****lurd************************l**r************q*d***u**u'[e.which-8]]=e.type[5]?1:0;
+	// ks[e.key]=e.type[5]?1:0;
 	if (e.which > 186) ks['+*-'[e.which-187]]=e.type[5]?1:0;
+	e.preventDefault()
 	Object.keys(kt).forEach(k => ks[k] && kt[k]?.());
-	// console.log(e.which, JSON.stringify(ks));
+	console.log(e.key, e.key.charCodeAt(), e.which, JSON.stringify(ks));
 }
 // onkeydown = e => console.log(e, e.type[5], e.which);
 // onkeyup = e => console.log(e, e.type[5]);
-
-let cam=[0, 0];
-let zoom = 1;
 
 onclick=e=>{
 	if (Math.random() < 0.5) {
@@ -95,8 +100,17 @@ onwheel = (e) => { /* e.preventDefault(); */ wheelZoom(e.deltaY); }
 
 // Make the physical planet
 const planet = s1.shape(CIRCLE, PLANET_CENTER, 0, PLANET_RADIUS);
-s1.shape(RECTANGLE, [0, -PLANET_RADIUS - 10], 0, 400, 20); // Platform
+// Non-Physical Rectangles
+const npr = (x, y, w, h) => {
+	const r = s1.shape(RECTANGLE, [x, y], 0, w, h);
+	r.f = 0.1;
+};
+npr(0, -PLANET_RADIUS, 440, 40); // Platform
+npr(-14, -PLANET_RADIUS - 50, 10, 60);
+npr(14, -PLANET_RADIUS - 50, 10, 60);
 s1.shape(RECTANGLE, [300, -PLANET_RADIUS - 100], 0, 100, 250); // Test building
+
+const LAUNCHPAD_RESET_POS = [0, -PLANET_RADIUS - 40];
 
 const MODE_NAMES = ['Burst', 'Sustained Burn'];
 const rocket = {
@@ -126,7 +140,7 @@ const rocket = {
 		// console.log(this.nozzle.a, this.engine.a);
 	},
 	engineOn: 0,
-	enginePower: 0.6,
+	enginePower: 0.4,
 	throttle: 0.4,
 	maxThrottle: 1,
 	setThrottle(t) { this.throttle = clamp(t, 0, this.maxThrottle);	},
@@ -137,10 +151,11 @@ const rocket = {
 	applyThrust() {
 		const noz = this.nozzle;
 		const vec = angle2Vector(noz.a - PI/2);
-		// TODO: Apply this as a force not a velocity
-		noz.v[X] += vec[X] * this.throttle * this.enginePower;
-		noz.v[Y] += vec[Y] * this.throttle * this.enginePower;
-		// console.log(vec[X], vec[Y]);
+		// Old method involved applying to velocity
+		// noz.v[X] += vec[X] * this.throttle * this.enginePower;
+		// noz.v[Y] += vec[Y] * this.throttle * this.enginePower;
+		noz.F[X] = vec[X] * this.throttle * this.enginePower;
+		noz.F[Y] = vec[Y] * this.throttle * this.enginePower;
 		[
 			[255, 0, 0],
 			[255, 100, 0],
@@ -193,6 +208,31 @@ join(rocket.engine, rocket.nozzle, 0, 8, 0, -7);
 
 console.log(rocket, planet);
 
+const reset = () => {
+	const offset = subtractVectors(LAUNCHPAD_RESET_POS, rocket.nozzle.c);
+	rocket.compound.parts.forEach(p => {
+		const desiredAngle = 0;
+		const da = desiredAngle - p.a; // Difference between desired angle and current angle (a)
+		console.log(p.a, da);
+		// Note: transform only updates the geometry (vertices, etc),
+		// and not the rotation state (a)
+		s1.transform(p, offset, da);
+		// ...so we need to set the angle manually.
+		p.a = desiredAngle;
+		// Also let's cut the velocity and angular velocity
+		p.v = [0, 0];
+		p.A = 0;
+	});
+	rocket.engineOn = 0;
+	// rocket.compound.parts.forEach(p => {
+	// 	s1.transform(p, offset, 0);
+	// });
+	// s1.transform(rocket.body, [0, 0], 0);
+	// setPos(rocket.body.c, LAUNCHPAD_RESET_POS);
+};
+reset();
+
+
 // const hookSpot = s1.shape(RECTANGLE, [400, 400], 0, 10, 10);
 // s2 = s1.shape(RECTANGLE, [100, 50], 10, 20, 30);
 // s1 = s1.shape(CIRCLE, [300, 150], 10, 50);
@@ -205,15 +245,6 @@ console.log(rocket, planet);
 // const a1 = sim2.anchor(hookSpot2, [0,0]);
 // const a2 = sim2.anchor(car, [0,0]);
 // sim2.joint(SPRING, hookSpot2, a1, car, a2, .2, 180);
-
-const getCollisionsById=(sim, o={}, m, a, b)=>{
-	for (m of sim.M()) { // Loop over manifolds
-		a = m.A.e, b = m.B.e;
-		o[a] = o[a] ? [b, ...(o[a] || [])] : [b];
-		o[b] = o[b] ? [a, ...(o[b] || [])] : [b];
-	}
-	return o;
-};
 
 const calcPartsAltitude = parts =>
 	calcAltitude(parts.reduce((low, p) => Math.min(low, distance(p.c, [0, 0])), Infinity));
@@ -246,25 +277,11 @@ function calcTrajectory({ com, v, m }) {
 
 // Game loop
 const DT = 16;
+let trajectory = [];
 setInterval(() => {
-	// time++;
-	particles.run();
-	for (let sim of sims) {
-		for (let o of sim.H) {
-			o.g = calcPlanetGravity(o.m, o.c);
-		}
-		sim.run();
-		sim.collisions = getCollisionsById(sim);
+	if (commandQueue.length) {
+		if (commandQueue.shift() === 'reset') reset();
 	}
-	rocket.run(DT);
-	setCam([...rocket.compound.parts[2].c]);
-	rocket.compound.calc();
-	const trajectory = calcTrajectory(rocket.compound);
-	const speed = magnitude(rocket.compound.v);
-	draw(sims, particles, speed < .1 ? [] : [trajectory]);
-	altn.innerText = calcPartsAltitude(rocket.compound.parts).toFixed(0).padStart(6, '0');
-	thn.innerText = `${(rocket.throttle * 100).toFixed(1)} ${speed}`;
-	
 	if (ks.d) rocket.nozzle.v[Y] -= .3;
 	if (ks.l) rocket.rotate(-1);
 	if (ks.r) rocket.rotate(1);
@@ -275,9 +292,38 @@ setInterval(() => {
 	if (ks.C) rocket.increaseThrottle(-.008); // Ctrl
 	// if (ks.S) rocket.nextStage(); // Space
 
+	particles.run();
+	for (let sim of sims) {
+		for (let o of sim.H) {
+			o.g = calcPlanetGravity(o.m, o.c);
+			// This is a trick: The `F` force is always overwritten during the physics `run`,
+			// so we will add it to the gravity instead.
+			setPos(o.g, addVectors(o.g, o.F));
+		}
+		sim.run();
+		sim.collisions = getCollisionsById(sim);
+	}
+	rocket.run(DT);
+	rocket.compound.calc();
+	trajectory = calcTrajectory(rocket.compound);
+
 	// console.log(rocket.body.c[0], rocket.body.c[1]);
 	// console.log(sim1.M().length, sims[1].M().length);
 	// if (sims[1].M().length) console.log(sims[1].M())
+	missions.check(rocket);
 }, DT);
+
+const render = () => {
+	setCam([...rocket.body.c]);
+	const speed = magnitude(rocket.compound.v);
+	draw(sims, particles, speed < .1 ? [] : [trajectory], missions);
+	altn.innerText = calcPartsAltitude(rocket.compound.parts).toFixed(0).padStart(6, '0');
+	thn.innerText = `${(rocket.throttle * 100).toFixed(1)}`;
+	spdn.innerText = clamp(((speed * 100) - 1).toFixed(0), 0, Infinity);
+	elMode.innerText = MODE_NAMES[rocket.engineOn];
+	requestAnimationFrame(render);
+};
+
+requestAnimationFrame(render);
 
 window.g = { ks, rocket };
