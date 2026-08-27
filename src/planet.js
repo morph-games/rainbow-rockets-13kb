@@ -1,8 +1,8 @@
 import { PI, distance, clamp } from './utils.js';
 
 export const PLANET_CENTER = [0, 0];
-export const PLANET_RADIUS = 6000;
-const ATMOS_HEIGHT = 5000;
+export const PLANET_RADIUS = 9e3;
+const ATMOS_HEIGHT = 1e4;
 export const ATMOS_RADIUS = PLANET_RADIUS + ATMOS_HEIGHT;
 const ATMOS_SCALE_HEIGHT = ATMOS_HEIGHT / 6;
 export const PLANET_MASS = PLANET_RADIUS * PLANET_RADIUS * PI / 20;
@@ -13,7 +13,7 @@ export const calcPressurePercentAtRadius = (r) => clamp(Math.E ** (-(calcAltitud
 export const calcDampening = (pos) => .99 + (1 - calcPressurePercentAtRadius(distance(pos, PLANET_CENTER))) * .0099;
 export const setDampeningForPressure = (shape) => shape.dm = calcDampening(shape.c);
 
-const GRAV = 0.001;
+const GRAV = 0.002;
 const gravForce = (m1, [x1, y1], m2, [x2, y2]) => {
 	const dx = x2 - x1,
 		dy = y2 - y1,

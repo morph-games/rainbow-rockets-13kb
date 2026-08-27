@@ -34,10 +34,12 @@ export const draw = (sims, particles, trajectories, e, r) => {
 	// Draw the planet
 	const screenPos = w2s([0, 0]);
 	const gradient = c.createRadialGradient(...screenPos, 0, ...screenPos, ATMOS_RADIUS * zoom);
-	// #8cf
-	gradient.addColorStop(0, 'rgba(200, 200, 200, 0.7)'); // Center
-	gradient.addColorStop(0.7, 'rgba(136, 204, 255, 1)'); // Sky color
-	gradient.addColorStop(1, 'rgba(255, 0, 200, 0.05)'); // Blend to nearly transpaent
+	[
+		[0, 200, 200, 200, .7], // center
+		[.5, 136, 204, 255, 1], // sky color #8cf
+		[.7, 136, 204, 255, 1], // sky
+		[1, 255, 0, 200, .05], // blend red/purplish to nearly transparent
+	].forEach(([p, r, g, b, a]) => gradient.addColorStop(p, `rgba(${r},${g},${b},${a})`));
 	c.beginPath();
 	c.arc(...screenPos, ATMOS_RADIUS * zoom, 0, TWO_PI);
 	c.fillStyle = gradient;
@@ -48,7 +50,7 @@ export const draw = (sims, particles, trajectories, e, r) => {
 		// draw shapes
 		for (e of sim.H) {
 			if (e.e >= 0) {
-				const color = sim.collisions[e.e] ? '#ccca' : e.d || '#fffa';
+				const color = sim.collisions[e.e] ? '#ccca' : e.d || '#fffc';
 				c.save(),
 				c.beginPath();
 				
@@ -57,8 +59,8 @@ export const draw = (sims, particles, trajectories, e, r) => {
 					c.fillStyle=color,
 					c.translate(...w2s(e.c)),
 					c.rotate(e.a),
-					c.arc(0,0,e.w * zoom,0,7),
-					c.lineTo(0,0)
+					c.arc(0,0,e.w * zoom,0,7)
+					// c.lineTo(0,0) // <-- needed to visibly see rotations on circles
 				} else { // rectangle
 					c.fillStyle=color,
 					c.moveTo(...w2s(e.V[0])),

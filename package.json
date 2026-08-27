@@ -21,6 +21,7 @@
   "type": "module",
   "dependencies": {
     "2Dphysics": "github:xem/2Dphysics",
-    "vite": "^8.2.1"
+    "vite": "^8.2.1",
+    "zzfx": "github:KilledByAPixel/ZzFX"
   }
 }

@@ -1,3 +1,5 @@
+import { zzfx } from 'zzfx';
+
 import { simFactory, RECTANGLE, CIRCLE, SPRING, REPULSIVE, HINGE, FIXED } from './xem-physics-factory.js';
 import { particles } from './particles.js';
 import { draw, setCam, wheelZoom, incZoom, s2w } from './canvas-renderer.js';
@@ -5,7 +7,7 @@ import {
 	PLANET_RADIUS, PLANET_CENTER, PLANET_MASS,
 	setDampeningForPressure, calcAltitude, calcPlanetGravity,
 } from './planet.js';
-import { colorToHex, clamp, sin, cos, PI, X, Y, angle2Vector, distance } from './utils.js';
+import { colorToHex, clamp, sin, cos, PI, X, Y, angle2Vector, distance, magnitude } from './utils.js';
 
 
 // aka. (v1, v2) => Math.hypot(v2[X] - v1[X], v2[Y] - v1[Y]);
@@ -13,6 +15,8 @@ import { colorToHex, clamp, sin, cos, PI, X, Y, angle2Vector, distance } from '.
 
 
 // ---------- World ----------
+
+zzfx(...[,,537,.02,.02,.22,1,1.59,-6.98,4.97]);
 
 const sims = [simFactory([0,0])]; // , simFactory()]; // You can have multiple simulations
 const s1 = sims[0];
@@ -31,6 +35,25 @@ const makeCompound = (shapeConfigArr, cx, cy) => {
 	const comp = {
 		c: [cx, cy], // center position
 		parts: [],
+		com: [0, 0], // Center of mass
+		v: [0, 0], // Overall velocity
+		m: 0, // total mass
+		// calculate center of mass, overall velocity, and total mass
+		calc() {
+			const me = this;
+			// Get the total mass of all parts
+			me.m = me.parts.reduce((sum, p) => sum + p.m, 0);
+			me.com = [0, 0];
+			me.v = [0, 0];
+			// Calculate the center of mass and the average velocity of all parts
+			me.parts.forEach(p => {
+				const massPortion = p.m / me.m;
+				me.com[X] += p.c[X] * massPortion;
+				me.com[Y] += p.c[Y] * massPortion;
+				me.v[X] += p.v[X] * massPortion;
+				me.v[Y] += p.v[Y] * massPortion;
+			});
+		},
 	};
 	shapeConfigArr.forEach((config) => addShape(config, comp));
 	return comp;
@@ -75,28 +98,35 @@ const planet = s1.shape(CIRCLE, PLANET_CENTER, 0, PLANET_RADIUS);
 s1.shape(RECTANGLE, [0, -PLANET_RADIUS - 10], 0, 400, 20); // Platform
 s1.shape(RECTANGLE, [300, -PLANET_RADIUS - 100], 0, 100, 250); // Test building
 
-const throttleScale = 0.1;
 const MODE_NAMES = ['Burst', 'Sustained Burn'];
 const rocket = {
 	compound: makeCompound(
 		[
+			[8, 16], // nose cone
+			[16, 8], // probe core
 			[16, 50, 0, 0], // body
 			[16, 16, 0, 25], // engine base
 			[12, 16], // engine nozzle
 		],
 		0, -PLANET_RADIUS * 1.1
 	),
-	get nozzle() { return this.compound.parts[2]; },
+	get nozzle() { return this.compound.parts[4]; },
 	gim: 0,
 	deltaGim: .01,
+	rotate(dir) { // Handle user input to move the ship left (-1) or right (1)
+		this.gimbalCooldown = 50;
+		this.gimbal(dir);
+		this.core.A += .05 * dir;
+	},
 	gimbal(n) {
 		const ogGim = this.gim;
 		this.gim = clamp(this.gim + n * this.deltaGim, -.7, .7);
 		const dg = ogGim - this.gim;
 		this.nozzle.a += dg;
-		// console.log(this.nozzle.a);
+		// console.log(this.nozzle.a, this.engine.a);
 	},
 	engineOn: 0,
+	enginePower: 0.6,
 	throttle: 0.4,
 	maxThrottle: 1,
 	setThrottle(t) { this.throttle = clamp(t, 0, this.maxThrottle);	},
@@ -107,8 +137,9 @@ const rocket = {
 	applyThrust() {
 		const noz = this.nozzle;
 		const vec = angle2Vector(noz.a - PI/2);
-		noz.v[X] += vec[X] * this.throttle;
-		noz.v[Y] += vec[Y] * this.throttle;
+		// TODO: Apply this as a force not a velocity
+		noz.v[X] += vec[X] * this.throttle * this.enginePower;
+		noz.v[Y] += vec[Y] * this.throttle * this.enginePower;
 		// console.log(vec[X], vec[Y]);
 		[
 			[255, 0, 0],
@@ -130,14 +161,19 @@ const rocket = {
 		// particles.new(1, [noz.c[X] + 10, noz.c[Y], 0], vel, [0, 255, 0, 255]);
 		// particles.new(1, [noz.c[X] + 20, noz.c[Y], 0], vel, [0, 0, 255, 255]);
 	},
-	run() {
+	run(t) {
 		this.compound.parts.forEach((s) => setDampeningForPressure(s));
 		if (this.throttle && this.engineOn) this.applyThrust();
+		if (this.gimbalCooldown > 0) this.gimbalCooldown -= t;
+		else this.gimbal(this.gim > 0 ? -2 : 2);
 	},
 };
-rocket.body = rocket.compound.parts[0];
+rocket.nose = rocket.compound.parts[0];
+rocket.core = rocket.compound.parts[1];
+rocket.body = rocket.compound.parts[2];
+rocket.engine = rocket.compound.parts[3];
 // rocket.body.m /= 3;
-rocket.body.f /= 10;
+// rocket.body.f /= 10;
 // rocket.nozzle = rocket.compound.parts[2];
 
 const join = (part1, part2, offset1X = 0, offset1Y = 0, offset2X = 0, offset2Y = 0, type = FIXED) => {
@@ -150,8 +186,10 @@ const join = (part1, part2, offset1X = 0, offset1Y = 0, offset2X = 0, offset2Y =
 // const a2 = s1.anchor(rocket.compound.parts[1], [0, -8]);
 // s1.joint(FIXED, rocket.compound.parts[0], a1, rocket.compound.parts[1], a2);
 
-join(rocket.compound.parts[0], rocket.compound.parts[1], 0, 25, 0, -8);
-join(rocket.compound.parts[1], rocket.nozzle, 0, 8, 0, -7, FIXED);
+join(rocket.nose, rocket.core, 0, 8, 0, -4);
+join(rocket.core, rocket.body, 0, 4, 0, -25);
+join(rocket.body, rocket.engine, 0, 25, 0, -8);
+join(rocket.engine, rocket.nozzle, 0, 8, 0, -7);
 
 console.log(rocket, planet);
 
@@ -182,21 +220,10 @@ const calcPartsAltitude = parts =>
 
 
 // X = 0, Y = 1
-function calcTrajectory(parts) {
-	// Get the total mass of all parts
-	const m = parts.reduce((sum, p) => sum + p.m, 0);
-	const com = [0, 0]; // Center of mass
-	const v = [0, 0];
-	// Calculate the center of mass and the average velocity of all parts
-	parts.forEach((p) => {
-		const massPortion = p.m / m;
-		com[X] += p.c[X] * massPortion;
-		com[Y] += p.c[Y] * massPortion;
-		v[X] += p.v[X] * massPortion;
-		v[Y] += p.v[Y] * massPortion;
-	});
+function calcTrajectory({ com, v, m }) {
 	// Start the trajectory line at the center of mass
 	const traj = [[...com]];
+	const tv = [...v]; // trajectory velocity
 	const dt = 10;
 	// Iterate into the future to see where the object will go
 	for (let t = 0; t < 1000; t++) {
@@ -205,11 +232,11 @@ function calcTrajectory(parts) {
 		if (distance(pos, [0, 0]) < PLANET_RADIUS) t = 1000;
 		const fG = calcPlanetGravity(m, pos);
 		const accG = [fG[X] / m, fG[Y] / m];
-		v[X] += accG[X] * dt;
-		v[Y] += accG[Y] * dt;
+		tv[X] += accG[X] * dt;
+		tv[Y] += accG[Y] * dt;
 		traj.push([
-			pos[X] + v[X] * dt,
-			pos[Y] + v[Y] * dt,
+			pos[X] + tv[X] * dt,
+			pos[Y] + tv[Y] * dt,
 		]);
 	}
 	// Return an array of 2d array positions
@@ -218,6 +245,7 @@ function calcTrajectory(parts) {
 
 
 // Game loop
+const DT = 16;
 setInterval(() => {
 	// time++;
 	particles.run();
@@ -228,16 +256,18 @@ setInterval(() => {
 		sim.run();
 		sim.collisions = getCollisionsById(sim);
 	}
-	rocket.run();
+	rocket.run(DT);
 	setCam([...rocket.compound.parts[2].c]);
-	const trajectory = calcTrajectory(rocket.compound.parts);
-	draw(sims, particles, [trajectory]);
+	rocket.compound.calc();
+	const trajectory = calcTrajectory(rocket.compound);
+	const speed = magnitude(rocket.compound.v);
+	draw(sims, particles, speed < .1 ? [] : [trajectory]);
 	altn.innerText = calcPartsAltitude(rocket.compound.parts).toFixed(0).padStart(6, '0');
-	thn.innerText = (rocket.throttle * 100).toFixed(1);
+	thn.innerText = `${(rocket.throttle * 100).toFixed(1)} ${speed}`;
 	
 	if (ks.d) rocket.nozzle.v[Y] -= .3;
-	if (ks.l) rocket.gimbal(-1);
-	if (ks.r) rocket.gimbal(1);
+	if (ks.l) rocket.rotate(-1);
+	if (ks.r) rocket.rotate(1);
 	if (ks.u) rocket.thrust();
 	if (ks.z) rocket.setThrottle(rocket.maxThrottle);
 	if (ks.x) rocket.setThrottle(0);
@@ -248,6 +278,6 @@ setInterval(() => {
 	// console.log(rocket.body.c[0], rocket.body.c[1]);
 	// console.log(sim1.M().length, sims[1].M().length);
 	// if (sims[1].M().length) console.log(sims[1].M())
-}, 16);
+}, DT);
 
 window.g = { ks, rocket };
