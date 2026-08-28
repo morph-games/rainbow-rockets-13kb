@@ -4,7 +4,7 @@ export const PLANET_CENTER = [0, 0];
 export const PLANET_RADIUS = 9e3;
 const ATMOS_HEIGHT = 1e4;
 export const ATMOS_RADIUS = PLANET_RADIUS + ATMOS_HEIGHT;
-const ATMOS_SCALE_HEIGHT = ATMOS_HEIGHT / 6;
+const ATMOS_SCALE_HEIGHT = ATMOS_HEIGHT / 3.6; // <-- 3.x is just a magic number that feels right
 export const PLANET_MASS = PLANET_RADIUS * PLANET_RADIUS * PI / 20;
 // const SEA_LEVEL_PRESSURE = 1e3;
 export const calcAltitude = (r) => r - PLANET_RADIUS;

@@ -1,4 +1,4 @@
-import { colorToHex, clamp, X, Y, TWO_PI } from './utils.js';
+import { colorToHex, clamp, X, Y, TWO_PI, lerpVectors } from './utils.js';
 import { PLANET_RADIUS, ATMOS_RADIUS, PLANET_CENTER } from './planet.js';
 
 const c = a.getContext`2d`
@@ -13,7 +13,7 @@ export const s2w=(x,y)=>[(x - rendW) / zoom + cam[X], (y - rendH) / zoom + cam[Y
 // World to screen
 export const w2s=([x,y])=>[(x - cam[X]) * zoom + rendW, (y - cam[Y]) * zoom + rendH];
 
-export const setCam = camParam => cam = camParam;
+export const setCam = (goalCam, now) => cam = now ? [...goalCam] : lerpVectors(cam, goalCam, 0.1);
 const setZoom = z => { zoom = clamp(z, 0.005, 2);
 	// console.log(zoom)
 };
@@ -112,7 +112,7 @@ export const draw = (sims, particles, trajectories, missions, e, r) => {
 	}
 	const now = new Date();
 	// drawText('🦄', cam);
-	missions.current().objectives.forEach(o => {
+	missions.objs(o => {
 		if (o.completed && now - o.completed > 3e3) return;
 		// if (o.completed - now < 1) console.log(o.completed - now);
 		// const a = o.completed ? clamp(255 - (now - o.completed)/1000, 0, 255) : 255;

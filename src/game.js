@@ -5,6 +5,7 @@ import { particles } from './particles.js';
 import { draw, setCam, wheelZoom, incZoom, s2w } from './canvas-renderer.js';
 import {
 	PLANET_RADIUS, PLANET_CENTER, PLANET_MASS,
+	calcPressurePercentAtRadius,
 	setDampeningForPressure, calcAltitude, calcPlanetGravity,
 } from './planet.js';
 import { getCollisionsById } from './physics-extensions.js';
@@ -22,6 +23,8 @@ zzfx(...[,,537,.02,.02,.22,1,1.59,-6.98,4.97]);
 
 const sims = [simFactory([0,0])]; // , simFactory()]; // You can have multiple simulations
 const s1 = sims[0];
+let look = [0, 0];
+let lookCooldown = 0;
 // s1.G[Y] = 0; // 0.005;
 // const rect = (w, h, cx, cy, w, h, m) => s1.shape(RECTANGLE, [400, 700], 0, 800, 30),
 const rect = (x, y, w, h) => s1.shape(RECTANGLE, [x, y], w * h, w, h);
@@ -65,6 +68,11 @@ const makeCompound = (shapeConfigArr, cx, cy) => {
 // u=r=d=l=0;
 // onkeydown=onkeyup=e=>this['lurd************************l**r************l*d***u**u'[e.which-37]]=e.type[5]
 
+const lookAtObj = (i) => {
+	lookCooldown = 2e3;
+	look = missions.current().objectives[i]?.pos;
+};
+
 const commandQueue = [];
 const ks = {}; // { u: 0, r: 0, d: 0, l: 0, S: 0 };
 const kt = {
@@ -73,9 +81,12 @@ const kt = {
 	'+': () => incZoom(.1),
 	T: () => rocket.engineOn ^= 1, // Bitwise NOT operator to flip from 0 <-> 1
 	B: () => commandQueue.push('reset'),
+	z: () => rocket.setThrottle(1),
+	x: () => rocket.setThrottle(0),
+	E: () => { if (missions.next()) { reset(); lookAtObj(0); } },
 };
 onkeydown = onkeyup = e => {
-	ks['BT******HC**************S****lurd************************l**r************q*d***u**u'[e.which-8]]=e.type[5]?1:0;
+	ks['BT***E**HC**************S****lurd************************l**r************q*d***ux*z***'[e.which-8]]=e.type[5]?1:0;
 	// ks[e.key]=e.type[5]?1:0;
 	if (e.which > 186) ks['+*-'[e.which-187]]=e.type[5]?1:0;
 	e.preventDefault()
@@ -91,6 +102,10 @@ onclick=e=>{
 	} else {
 		circle(...s2w(e.pageX, e.pageY), 10);
 	}
+	// If we clicked on an objective then look at it
+	const objIndex = e.target?.dataset?.obj;
+	if (objIndex?.length) lookAtObj(Number(objIndex));
+	// console.log(e.target);
 	// s1.shape(CIRCLE, , 500, 10);
 };
 
@@ -112,7 +127,7 @@ s1.shape(RECTANGLE, [300, -PLANET_RADIUS - 100], 0, 100, 250); // Test building
 
 const LAUNCHPAD_RESET_POS = [0, -PLANET_RADIUS - 40];
 
-const MODE_NAMES = ['Burst', 'Sustained Burn'];
+const MODE_NAMES = ['Burst (W,↑)', 'Sustained Burn'];
 const rocket = {
 	compound: makeCompound(
 		[
@@ -156,6 +171,7 @@ const rocket = {
 		// noz.v[Y] += vec[Y] * this.throttle * this.enginePower;
 		noz.F[X] = vec[X] * this.throttle * this.enginePower;
 		noz.F[Y] = vec[Y] * this.throttle * this.enginePower;
+		if (Math.random() > this.throttle) return; // No particles
 		[
 			[255, 0, 0],
 			[255, 100, 0],
@@ -311,16 +327,33 @@ setInterval(() => {
 	// console.log(sim1.M().length, sims[1].M().length);
 	// if (sims[1].M().length) console.log(sims[1].M())
 	missions.check(rocket);
+	if (lookCooldown <= 0) look = [...rocket.body.c];
+	lookCooldown -= DT;
 }, DT);
 
+const $ = id => document.getElementById(id);
+const setHTML = (el, html) => el.innerHTML !== html && (el.innerHTML = html);
+const setText = (el, txt) => el.innerText !== txt && (el.innerText = txt);
+
 const render = () => {
-	setCam([...rocket.body.c]);
+	setCam(look, lookCooldown < -2e3);
 	const speed = magnitude(rocket.compound.v);
 	draw(sims, particles, speed < .1 ? [] : [trajectory], missions);
-	altn.innerText = calcPartsAltitude(rocket.compound.parts).toFixed(0).padStart(6, '0');
+	const alt = calcPartsAltitude(rocket.compound.parts);
+	// altn.innerText = alt.toFixed(0).padStart(6, '0');
+	setText(altn, alt.toFixed(0).padStart(6, '0'));
 	thn.innerText = `${(rocket.throttle * 100).toFixed(1)}`;
+	thp.value = rocket.throttle;
 	spdn.innerText = clamp(((speed * 100) - 1).toFixed(0), 0, Infinity);
 	elMode.innerText = MODE_NAMES[rocket.engineOn];
+	atmos.value = calcPressurePercentAtRadius(alt + PLANET_RADIUS);
+	setText(msnnum, missions.index + 1);
+	setText(msntot, missions.length);
+	setHTML(
+		msnos,
+		missions.current().objectives.map((o, i) => '<li data-obj="' + i + '">' + (o.completed ? '✅' : '') + (o.description || 'Do thing') + '</li>').join('')
+	);
+	msndone.innerText = missions.completed() >= 1 ? 'Hit Enter for next mission.' : '';
 	requestAnimationFrame(render);
 };
 

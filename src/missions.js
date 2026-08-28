@@ -16,7 +16,16 @@ export const missions = [
 		objectives: [
 			{
 				...enterZoneType,
-				pos: [0, -PLANET_RADIUS - 700],
+				pos: [0, -PLANET_RADIUS - 300],
+				description: 'Launch into circle',
+			},
+		]
+	},
+	{
+		objectives: [
+			{
+				...enterZoneType,
+				pos: [100, -PLANET_RADIUS - 700],
 			},
 			{
 				...enterZoneType,
@@ -28,7 +37,15 @@ export const missions = [
 	}
 ];
 missions.index = 0;
+missions.next = () => {
+	if (missions.completed() < 1) return false;
+	missions.index = Math.min(missions.index + 1, missions.length - 1);
+	return true;
+};
 missions.current = () => missions[missions.index];
-missions.check = (rkt) => missions.current().objectives.forEach(o => {
+missions.objs = (cb) => missions.current().objectives.forEach(cb);
+missions.check = (rkt) => missions.objs(o => {
 	if (!o.completed && o.check(rkt)) o.completed = new Date();
 });
+missions.completed = () => missions.current().objectives.reduce((sum, o) => sum + (o.completed ? 1 : 0), 0)
+	/ missions.current().objectives.length;

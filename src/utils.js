@@ -10,3 +10,5 @@ export const distance = ([x1, y1], [x2, y2]) => hypot(x2 - x1, y2 - y1);
 export const setPos = (destPos, [x, y]) => { destPos[X] = x; destPos[Y] = y; };
 export const addVectors = ([x1, y1], [x2, y2]) => [x1 + x2, y1 + y2];
 export const subtractVectors = ([x1, y1], [x2, y2]) => [x1 - x2, y1 - y2];
+// a = start vector, b = end vector, t = interpolation factor 0-1
+export const lerpVectors = (a, b, t) => [a[X] + (b[X] - a[X]) * t, a[Y] + (b[Y] - a[Y]) * t];
