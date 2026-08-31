@@ -1,10 +1,10 @@
-import { colorToHex, clamp, X, Y, TWO_PI, lerpVectors } from './utils.js';
+import { colorToHex, clamp, X, Y, TWO_PI, lerpVectors, addVectors } from './utils.js';
 import { PLANET_RADIUS, ATMOS_RADIUS, PLANET_CENTER } from './planet.js';
 
 const c = a.getContext`2d`
 c.font = 'bold 50px Verdana';
-a.width = 800;
-a.height = 800;
+a.width = window.innerWidth - 2;
+a.height = window.innerHeight - 2;
 const rendW = a.width / 2, rendH = a.height / 2;
 let cam = [0, 0];
 let zoom = 1;
@@ -43,6 +43,21 @@ function drawText(text, pos, color, borderColor = '#fff', size = 18) {
 	c.fillText(text, x, y);
 }
 
+function getRainbowGradient(pos1, pos2, a = 'f') {
+	const [startX, startY] = w2s(pos1);
+	const [endX, endY] = w2s(pos2);
+	const grad = c.createLinearGradient(startX, startY, endX, endY);
+	[
+		[0, 'f00'], // red
+		[.15, 'f70'], // orange
+		[.4, 'cc0'], // yellow
+		[.6, '3c0'], // green
+		[.85, '00c'], // blue
+		[1, 'c0c'], // purple
+	].forEach(([n, rgb]) => grad.addColorStop(n, `#${rgb}${a}`));
+	return grad
+}
+
 export const draw = (sims, particles, trajectories, missions, e, r) => {
 	// reset canvas
 	a.width ^= 0;
@@ -66,7 +81,8 @@ export const draw = (sims, particles, trajectories, missions, e, r) => {
 		// draw shapes
 		for (e of sim.H) {
 			if (e.e >= 0) {
-				const color = sim.collisions?.[e.e] ? '#ccca' : e.d || '#fffc';
+				// const color = sim.collisions?.[e.e] ? '#ccca' : e.d || '#fffc';
+				const color = e.color || '#fffc';
 				c.save(),
 				c.beginPath();
 				
@@ -116,8 +132,13 @@ export const draw = (sims, particles, trajectories, missions, e, r) => {
 		if (o.completed && now - o.completed > 3e3) return;
 		// if (o.completed - now < 1) console.log(o.completed - now);
 		// const a = o.completed ? clamp(255 - (now - o.completed)/1000, 0, 255) : 255;
-		const color = o.completed ? '#595' : '#955';
+		const color = o.completed ? '#595' : getRainbowGradient(
+			addVectors(o.pos, [-o.r, 0]),
+			addVectors(o.pos, [o.r, 0])
+		);
+		c.lineWidth = 8;
 		drawCircle(o.pos, o.r, color, 0);
+		c.lineWidth = 6;
 		if (zoom > .07) drawText(o.completed ? '✅' : o.description, o.pos, color);
 	});
 	trajectories.forEach(traj => traj.forEach(pos => {

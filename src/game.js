@@ -115,6 +115,7 @@ onwheel = (e) => { /* e.preventDefault(); */ wheelZoom(e.deltaY); }
 
 // Make the physical planet
 const planet = s1.shape(CIRCLE, PLANET_CENTER, 0, PLANET_RADIUS);
+planet.color = '#064';
 // Non-Physical Rectangles
 const npr = (x, y, w, h) => {
 	const r = s1.shape(RECTANGLE, [x, y], 0, w, h);

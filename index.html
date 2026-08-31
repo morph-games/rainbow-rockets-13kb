@@ -4,8 +4,10 @@
 		body {
 			background: #111;
 			margin: 0;
+			padding: 0;
 			font-family: Verdana, sans-serif;
-			font-size: calc(12px + 1vmin);
+			font-size: calc(12px + 3vh - 1vw);
+			overflow: hidden;
 		}
 		canvas {
 			border: solid 1px black;
@@ -63,6 +65,9 @@
 			color: #ff5;
 		}
 	</style>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<link rel=icon href=data:,>
+	<!-- <link rel=icon href="data:image/svg+xml,<svg xmlns=%22http://w3.org viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛳</text></svg>"> -->
 </head>
 <body>
 <canvas id=a></canvas>
