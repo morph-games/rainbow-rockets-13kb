@@ -1,4 +1,4 @@
-import { colorToHex, clamp, X, Y, TWO_PI, lerpVectors, addVectors } from './utils.js';
+import { colorToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, polar2Vector } from './utils.js';
 import { PLANET_RADIUS, ATMOS_RADIUS, PLANET_CENTER } from './planet.js';
 
 const c = a.getContext`2d`
@@ -58,12 +58,12 @@ function getRainbowGradient(pos1, pos2, a = 'f') {
 	return grad
 }
 
-export const draw = (sims, particles, trajectories, missions, e, r) => {
+export const draw = (sims, particles, trajectories, missions, rainbow, e, r) => {
 	// reset canvas
 	a.width ^= 0;
 
 	// Draw the planet
-	const screenPos = w2s([0, 0]);
+	const screenPos = w2s(PLANET_CENTER);
 	const gradient = c.createRadialGradient(...screenPos, 0, ...screenPos, ATMOS_RADIUS * zoom);
 	[
 		[0, 200, 200, 200, .7], // center
@@ -75,6 +75,29 @@ export const draw = (sims, particles, trajectories, missions, e, r) => {
 	c.arc(...screenPos, ATMOS_RADIUS * zoom, 0, TWO_PI);
 	c.fillStyle = gradient;
 	c.fill();
+
+	// Draw rainbox
+	{
+		c.save();
+		const rr = rainbow.r * zoom;
+		const rainbowWidth = rainbow.w * zoom;
+		const rc = w2s(rainbow.c);
+		const grad = c.createRadialGradient(...rc, rr + rainbowWidth/2, ...rc, rr - rainbowWidth/2);
+		[
+			[0, 'f00'], // red
+			[.2, 'f70'], // orange
+			[.4, 'ee0'], // yellow
+			[.6, '3c0'], // green
+			[.8, '22e'], // blue
+			[1, 'c0c'], // purple
+		].forEach(([n, rgb]) => grad.addColorStop(n, `#${rgb}c`));
+		c.beginPath();
+		c.arc(...rc, rr, 0, TWO_PI);
+		c.lineWidth = rainbowWidth;
+		c.strokeStyle = grad;
+		c.stroke();
+		c.restore();
+	}
 
 	// Draw objects within the physics sims
 	for (let sim of sims) {

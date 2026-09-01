@@ -9,7 +9,7 @@ import {
 	setDampeningForPressure, calcAltitude, calcPlanetGravity,
 } from './planet.js';
 import { getCollisionsById } from './physics-extensions.js';
-import { setPos, subtractVectors, clamp, sin, cos, PI, X, Y, angle2Vector, distance, magnitude, TWO_PI, addVectors } from './utils.js';
+import { setPos, subtractVectors, clamp, sin, cos, PI, X, Y, angle2Vector, distance, magnitude, TWO_PI, addVectors, polar2Vector } from './utils.js';
 import { missions } from './missions.js';
 
 
@@ -97,17 +97,36 @@ onkeydown = onkeyup = e => {
 // onkeyup = e => console.log(e, e.type[5]);
 
 onclick=e=>{
-	if (Math.random() < 0.5) {
-		rect(...s2w(e.pageX, e.pageY), 20, 20);
-	} else {
-		circle(...s2w(e.pageX, e.pageY), 10);
-	}
+	// if (Math.random() < 0.5) {
+	// 	rect(...s2w(e.pageX, e.pageY), 20, 20);
+	// } else {
+	// 	circle(...s2w(e.pageX, e.pageY), 10);
+	// }
+	const { nodeName, dataset } = e.target;
+	if (nodeName === 'U' && dataset.key && kt[dataset.key]) kt[dataset.key]();
+
 	// If we clicked on an objective then look at it
 	const objIndex = e.target?.dataset?.obj;
 	if (objIndex?.length) lookAtObj(Number(objIndex));
 	// console.log(e.target);
 	// s1.shape(CIRCLE, , 500, 10);
 };
+let clickedKey;
+onpointerdown=e=>{
+	const { nodeName, dataset } = e.target;
+	if (nodeName === 'U' && dataset.key) {
+		clickedKey = dataset.key;
+		ks[dataset.key] = 1;
+		console.log(ks);
+	}
+};
+onpointercancel = onpointerleave = onpointerup = e => {
+	if (clickedKey) {
+		ks[clickedKey] = 0;
+		clickedKey = null;
+		console.log(ks);
+	}
+}
 
 onwheel = (e) => { /* e.preventDefault(); */ wheelZoom(e.deltaY); }
 
@@ -128,7 +147,7 @@ s1.shape(RECTANGLE, [300, -PLANET_RADIUS - 100], 0, 100, 250); // Test building
 
 const LAUNCHPAD_RESET_POS = [0, -PLANET_RADIUS - 40];
 
-const MODE_NAMES = ['Burst (W,↑)', 'Sustained Burn'];
+const MODE_NAMES = ['Burst', 'Sustained Burn'];
 const rocket = {
 	compound: makeCompound(
 		[
@@ -155,6 +174,10 @@ const rocket = {
 		this.nozzle.a += dg;
 		// console.log(this.nozzle.a, this.engine.a);
 	},
+	fuel: 1e3,
+	maxFuel: 1e3,
+	setFuel(t) { this.fuel = clamp(t, 0, this.maxFuel);	},
+	refuel(dr) { this.setFuel(this.fuel + dr); },
 	engineOn: 0,
 	enginePower: 0.4,
 	throttle: 0.4,
@@ -165,6 +188,8 @@ const rocket = {
 		this.applyThrust();
 	},
 	applyThrust() {
+		this.refuel(-.3 * this.throttle);
+		if (this.fuel <= 0) return;
 		const noz = this.nozzle;
 		const vec = angle2Vector(noz.a - PI/2);
 		// Old method involved applying to velocity
@@ -172,6 +197,7 @@ const rocket = {
 		// noz.v[Y] += vec[Y] * this.throttle * this.enginePower;
 		noz.F[X] = vec[X] * this.throttle * this.enginePower;
 		noz.F[Y] = vec[Y] * this.throttle * this.enginePower;
+		
 		if (Math.random() > this.throttle) return; // No particles
 		[
 			[255, 0, 0],
@@ -291,10 +317,17 @@ function calcTrajectory({ com, v, m }) {
 	return traj;
 }
 
+// Other things to display
+const rainbow = {
+	mag: 7e3, angle: -PI * .4, // coordinates
+	c: [0, 0], // center (position)
+	r: PLANET_RADIUS * .5, // size
+	w: 200,
+};
+let trajectory = [];
 
 // Game loop
 const DT = 16;
-let trajectory = [];
 setInterval(() => {
 	if (commandQueue.length) {
 		if (commandQueue.shift() === 'reset') reset();
@@ -324,6 +357,12 @@ setInterval(() => {
 	rocket.compound.calc();
 	trajectory = calcTrajectory(rocket.compound);
 
+	{ // Check rainbow
+		rainbow.c = polar2Vector(rainbow.mag, rainbow.angle);
+		const d = distance(rocket.compound.com, rainbow.c);
+		if (Math.abs(d - rainbow.r) <= (rainbow.w/2)) rocket.refuel(3);
+	}
+
 	// console.log(rocket.body.c[0], rocket.body.c[1]);
 	// console.log(sim1.M().length, sims[1].M().length);
 	// if (sims[1].M().length) console.log(sims[1].M())
@@ -339,7 +378,7 @@ const setText = (el, txt) => el.innerText !== txt && (el.innerText = txt);
 const render = () => {
 	setCam(look, lookCooldown < -2e3);
 	const speed = magnitude(rocket.compound.v);
-	draw(sims, particles, speed < .1 ? [] : [trajectory], missions);
+	draw(sims, particles, speed < .1 ? [] : [trajectory], missions, rainbow);
 	const alt = calcPartsAltitude(rocket.compound.parts);
 	// altn.innerText = alt.toFixed(0).padStart(6, '0');
 	setText(altn, alt.toFixed(0).padStart(6, '0'));
@@ -348,13 +387,15 @@ const render = () => {
 	spdn.innerText = clamp(((speed * 100) - 1).toFixed(0), 0, Infinity);
 	elMode.innerText = MODE_NAMES[rocket.engineOn];
 	atmos.value = calcPressurePercentAtRadius(alt + PLANET_RADIUS);
+	flp.value = rocket.fuel;
+	flp.max = rocket.maxFuel;
 	setText(msnnum, missions.index + 1);
 	setText(msntot, missions.length);
 	setHTML(
 		msnos,
 		missions.current().objectives.map((o, i) => '<li data-obj="' + i + '">' + (o.completed ? '✅' : '') + (o.description || 'Do thing') + '</li>').join('')
 	);
-	msndone.innerText = missions.completed() >= 1 ? 'Hit Enter for next mission.' : '';
+	setHTML(msndone, missions.completed() >= 1 ? '<u data-key="E">Next mission [Enter]</u>' : '');
 	requestAnimationFrame(render);
 };
 

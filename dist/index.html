@@ -4,20 +4,55 @@
 		body {
 			background: #111;
 			margin: 0;
+			padding: 0;
 			font-family: Verdana, sans-serif;
 			font-size: calc(12px + 1vmin);
+			overflow: hidden;
 		}
 		canvas {
 			border: solid 1px black;
 		}
-		b {
+		div, b, u {
 			display: block;
+			box-sizing: border-box;
+			text-decoration: none;
+		}
+		u {
+			display: inline-block;
+			padding: 1em;
+			min-width: 6em;
+			margin: 1em;
+			border: solid 1px #f9f;
+			border-radius: 0.8em;
+			text-align: center;
+			cursor: pointer;
+			user-select: none;
+			background: #0004;
+		}
+		u:active {
+			scale: 0.9;
+		}
+		#tp, #bm {
 			padding: 1em;
 			border-radius: 0.4em;
 			position: absolute;
-			background: #1116;
 			color: #f9f;
 			font-size: 50%;
+			width: 100%;
+			display: flex;
+			justify-content: space-between;
+		}
+		#tp {
+			top: 0;
+			align-items: flex-start;
+		}
+		#tp > b {
+			padding: 1em;
+			background: #1116;
+		}
+		#bm {
+			bottom: 0;
+			align-items: flex-end;
 		}
 		progress {
 			accent-color: #f9f;
@@ -25,7 +60,7 @@
 		#atmos {
 			accent-color: #39f;
 		}
-		#alt, #th {
+		#alt {
 			border: ridge .5vmin;
 			box-shadow: 0 0 1vmin #0005;
 		}
@@ -62,22 +97,67 @@
 		#msndone {
 			color: #ff5;
 		}
+		#fl {
+			writing-mode: vertical-lr;
+			/* rotate: 90deg; */
+		}
 	</style>
-  <script type="module" crossorigin src="./assets/index-BHUe4lAU.js"></script>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<link rel=icon href=data:,>
+	<!-- <link rel=icon href="data:image/svg+xml,<svg xmlns=%22http://w3.org viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛳</text></svg>"> -->
+  <script type="module" crossorigin src="./assets/index-BDeTz99H.js"></script>
 </head>
 <body>
 <canvas id=a></canvas>
+<b id=tp>
+	<b id=fl>
+		Fuel <progress id=flp value=0 max=1></progress>
+	</b>
+	<b id=alt>
+		Altitude: <i id=altn></i><br>
+		<progress id=atmos value=0 max=1></progress>
+		<b>Atmosphere</b>
+	</b>
+	<b id=msn>
+		Mission <i id=msnnum></i>/<i id=msntot></i>
+		<br>
+		<ol id=msnos>
+			<li>Do thing</li>
+			<li>Do another thing</li>
+		</ol>
+		<div id=msndone></div>
+	</b>
+</b>
+<b id=bm>
+	<b>
+		<u data-key=l>&larr;</u><u data-key=r>&rarr;</u>
+		<!-- TODO: Left/right controls -->
+		<b>Throttle:</b>
+		<u data-key=C>&darr; [Ctrl, X]</u>
+		<u data-key=H>&uarr; [Shift, Z]</u>
+		<br>
+		<progress id=thp value=0 max=1></progress>
+		<i id=thn></i>
+	</b>
+	<b>
+		<!-- TODO: Navbar -->
+		Speed: <i id=spdn></i>
+	</b>
+	<b id=th>
+		<u data-key=u>Burst Thrust [W,&uarr;]</u>
+		<br>
+		<u data-key=T>Mode [Tab]</u>: <i id=elMode></i>
+	</b>
+</b>
+
+<!--
 <b id=alt>Altitude: <i id=altn></i><br>
 	<progress id=atmos value=0 max=1></progress>
 	<div>Atmosphere</div>
 </b>
-<b id=th>
-	Mode (Tab): <i id=elMode></i>
-	<br>Throttle (Shift, Ctrl, Z, X):
-	<progress id=thp value=0 max=1></progress>
-	<i id=thn></i>
-	<br>Speed: <i id=spdn></i>
-</b>
+-->
+
+<!--
 <b id=msn>
 	Mission <i id=msnnum></i>/<i id=msntot></i>
 	<br>
@@ -87,5 +167,6 @@
 	</ol>
 	<div id=msndone></div>
 </b>
+-->
 </body>
 </html>

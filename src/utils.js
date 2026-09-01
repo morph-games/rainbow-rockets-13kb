@@ -6,6 +6,8 @@ export const clamp = (n, minA = 0, maxB = 1) => min(max(n, minA), maxB);
 export const angle2Vector = (a) => [cos(a), sin(a)];
 export const magnitude = ([x, y]) => hypot(x, y);
 export const vector2Polar = ([x, y]) => ({ angle: Math.atan2(y, x), magnitude: hypot(x, y) });
+export const polar2Vector = (magnitude, angle = 0) => [magnitude * cos(angle), magnitude * sin(angle)];
+// ^ Note: Angle zero is to the right
 export const distance = ([x1, y1], [x2, y2]) => hypot(x2 - x1, y2 - y1);
 export const setPos = (destPos, [x, y]) => { destPos[X] = x; destPos[Y] = y; };
 export const addVectors = ([x1, y1], [x2, y2]) => [x1 + x2, y1 + y2];
