@@ -19,18 +19,20 @@
 		}
 		u {
 			display: inline-block;
-			padding: 1em;
+			padding: 1vh 3vw;
 			min-width: 6em;
 			margin: 1em;
-			border: solid 1px #f9f;
+			border: solid 2px #f9f;
 			border-radius: 0.8em;
 			text-align: center;
 			cursor: pointer;
 			user-select: none;
 			background: #0004;
+			box-shadow: 0 .5em .25em #0002;
 		}
 		u:active {
-			scale: 0.9;
+			scale: 0.92;
+			background: #0006;
 		}
 		#tp, #bm {
 			padding: 1em;
@@ -71,6 +73,7 @@
 		#th {
 			bottom: 2vh;
 			left: 2vh;
+			text-align: right;
 		}
 		i {
 			font-family: 'Courier New', monospace;
@@ -101,11 +104,14 @@
 			writing-mode: vertical-lr;
 			/* rotate: 90deg; */
 		}
+		.m {
+			padding: 2vh 4vw;
+		}
 	</style>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 	<link rel=icon href=data:,>
 	<!-- <link rel=icon href="data:image/svg+xml,<svg xmlns=%22http://w3.org viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛳</text></svg>"> -->
-  <script type="module" crossorigin src="./assets/index-BDeTz99H.js"></script>
+  <script type="module" crossorigin src="./assets/index-CyvIcd6J.js"></script>
 </head>
 <body>
 <canvas id=a></canvas>
@@ -130,23 +136,24 @@
 </b>
 <b id=bm>
 	<b>
-		<u data-key=l>&larr;</u><u data-key=r>&rarr;</u>
+		<u data-key=l class=m>&larr; [A]</u><u data-key=r class=m>[D] &rarr;</u>
 		<!-- TODO: Left/right controls -->
-		<b>Throttle:</b>
+		<b>Throttle:
+			<progress id=thp value=0 max=1></progress>
+			<i id=thn></i>
+		</b>
 		<u data-key=C>&darr; [Ctrl, X]</u>
 		<u data-key=H>&uarr; [Shift, Z]</u>
-		<br>
-		<progress id=thp value=0 max=1></progress>
-		<i id=thn></i>
 	</b>
 	<b>
 		<!-- TODO: Navbar -->
 		Speed: <i id=spdn></i>
 	</b>
 	<b id=th>
-		<u data-key=u>Burst Thrust [W,&uarr;]</u>
+		<u data-key=u class=m>Burst Thrust [W,&uarr;]</u>
 		<br>
-		<u data-key=T>Mode [Tab]</u>: <i id=elMode></i>
+		Mode: <i id=elMode></i>
+		<u data-key=T>Switch [Tab]</u>
 	</b>
 </b>
 

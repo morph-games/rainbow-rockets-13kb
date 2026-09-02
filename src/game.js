@@ -112,26 +112,61 @@ onclick=e=>{
 	// s1.shape(CIRCLE, , 500, 10);
 };
 let clickedKey;
+const pinchEvents = [];
+let pinchPrevDiff = null;
 onpointerdown=e=>{
 	const { nodeName, dataset } = e.target;
 	if (nodeName === 'U' && dataset.key) {
 		clickedKey = dataset.key;
 		ks[dataset.key] = 1;
 		console.log(ks);
+	} else {
+		pinchEvents.push(e); // For pinch-zoom
 	}
 };
-onpointercancel = onpointerleave = onpointerup = e => {
+onpointerout = onpointercancel = onpointerleave = onpointerup = e => {
 	if (clickedKey) {
 		ks[clickedKey] = 0;
 		clickedKey = null;
 		console.log(ks);
 	}
-}
+	{ // For pinch-zoom
+		// Remove this event from the target's cache
+		const index = pinchEvents.findIndex(ev => ev.pointerId === e.pointerId);
+		pinchEvents.splice(index, 1);
+		// If the number of pointers down is less than two then reset diff tracker
+		if (pinchEvents.length < 2) {
+			pinchPrevDiff = null;
+		}
+	}
+};
+onpointermove = e => {
+	// This function implements a 2-pointer horizontal pinch/zoom gesture
+	// Find this event in the cache and update its record with this event
+	const index = pinchEvents.findIndex(ev => ev.pointerId === e.pointerId);
+	this.pinchEvents[index] = ev;
+	// If two pointers are down, check for pinch gestures
+	if (pinchEvents.length === 2) {
+		// Calculate the distance between the two pointers
+		const [e1, e2] = pinchEvents;
+		const curDiff = distance([e1.clientX, e1.clientY], [e2.clientX, e2.clientY]);
+		if (pinchPrevDiff === null) {
+			pinchPrevDiff = curDiff;
+			return;
+		}
+		const dd = curDiff - pinchPrevDiff;
+		incZoom(dd / 10);
+		console.log('Diff of distance', dd);
+		// Cache the distance for the next move event
+		pinchPrevDiff = curDiff;
+	}
+};
 
 onwheel = (e) => { /* e.preventDefault(); */ wheelZoom(e.deltaY); }
 
-// TODO: Debug weird bug where first shape created is not moving
+// ----------------------------- Make Physical Entities -------------------------------------------
 
+// TODO: Debug weird bug where first shape created is not moving
 // Make the physical planet
 const planet = s1.shape(CIRCLE, PLANET_CENTER, 0, PLANET_RADIUS);
 planet.color = '#064';
@@ -276,22 +311,8 @@ const reset = () => {
 reset();
 
 
-// const hookSpot = s1.shape(RECTANGLE, [400, 400], 0, 10, 10);
-// s2 = s1.shape(RECTANGLE, [100, 50], 10, 20, 30);
-// s1 = s1.shape(CIRCLE, [300, 150], 10, 50);
-// s3 = s1.shape(RECTANGLE, [200, 0], 10, 20, 30);
-
-// const floor2 = sim2.shape(RECTANGLE, [400, 600], 0, 800, 30);
-// const hookSpot2 = sim2.shape(RECTANGLE, [400, 300], 0, 10, 10);
-// car = sim2.shape(RECTANGLE, [300, 0], 10, 20, 30);
-// npc = sim2.shape(RECTANGLE, [200, 300], 10, 30, 30);
-// const a1 = sim2.anchor(hookSpot2, [0,0]);
-// const a2 = sim2.anchor(car, [0,0]);
-// sim2.joint(SPRING, hookSpot2, a1, car, a2, .2, 180);
-
 const calcPartsAltitude = parts =>
 	calcAltitude(parts.reduce((low, p) => Math.min(low, distance(p.c, [0, 0])), Infinity));
-
 
 // X = 0, Y = 1
 function calcTrajectory({ com, v, m }) {
