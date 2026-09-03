@@ -3,6 +3,7 @@ import { PI, distance, clamp } from './utils.js';
 export const PLANET_CENTER = [0, 0];
 export const PLANET_RADIUS = 9e3;
 const ATMOS_HEIGHT = 1e4;
+export const CLOUD_HEIGHT = ATMOS_HEIGHT * .6;
 export const ATMOS_RADIUS = PLANET_RADIUS + ATMOS_HEIGHT;
 const ATMOS_SCALE_HEIGHT = ATMOS_HEIGHT / 3.6; // <-- 3.x is just a magic number that feels right
 export const PLANET_MASS = PLANET_RADIUS * PLANET_RADIUS * PI / 20;

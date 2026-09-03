@@ -1,4 +1,4 @@
-import { colorToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, polar2Vector } from './utils.js';
+import { colorToHex, color255ToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, polar2Vector } from './utils.js';
 import { PLANET_RADIUS, ATMOS_RADIUS, PLANET_CENTER } from './planet.js';
 
 const c = a.getContext`2d`
@@ -8,6 +8,7 @@ a.height = window.innerHeight - 2;
 const rendW = a.width / 2, rendH = a.height / 2;
 let cam = [0, 0];
 let zoom = 1;
+let rt = 0; // Render time
 // Screen to world
 export const s2w=(x,y)=>[(x - rendW) / zoom + cam[X], (y - rendH) / zoom + cam[Y]];
 // World to screen
@@ -58,7 +59,8 @@ function getRainbowGradient(pos1, pos2, a = 'f') {
 	return grad
 }
 
-export const draw = (sims, particles, trajectories, missions, rainbow, e, r) => {
+export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbow, e, r) => {
+	rt += dt;
 	// reset canvas
 	a.width ^= 0;
 
@@ -66,9 +68,11 @@ export const draw = (sims, particles, trajectories, missions, rainbow, e, r) => 
 	const screenPos = w2s(PLANET_CENTER);
 	const gradient = c.createRadialGradient(...screenPos, 0, ...screenPos, ATMOS_RADIUS * zoom);
 	[
-		[0, 200, 200, 200, .7], // center
+		[0, 200, 200, 200, 1], // center
+		[.45, 200, 200, 255, 1],
 		[.5, 136, 204, 255, 1], // sky color #8cf
-		[.7, 136, 204, 255, 1], // sky
+		[.6, 136, 204, 255, .9], // sky
+		[.8, 100, 100, 255, .5],
 		[1, 255, 0, 200, .05], // blend red/purplish to nearly transparent
 	].forEach(([p, r, g, b, a]) => gradient.addColorStop(p, `rgba(${r},${g},${b},${a})`));
 	c.beginPath();
@@ -79,6 +83,7 @@ export const draw = (sims, particles, trajectories, missions, rainbow, e, r) => 
 	// Draw rainbox
 	{
 		c.save();
+		c.filter = 'drop-shadow(0 0 12px #fff6)';
 		const rr = rainbow.r * zoom;
 		const rainbowWidth = rainbow.w * zoom;
 		const rc = w2s(rainbow.c);
@@ -96,6 +101,52 @@ export const draw = (sims, particles, trajectories, missions, rainbow, e, r) => 
 		c.lineWidth = rainbowWidth;
 		c.strokeStyle = grad;
 		c.stroke();
+		c.restore();
+	}
+
+	// Draw clouds
+	{
+		c.save();
+		c.filter = 'blur(2px) drop-shadow(0 4px 8px #0003)';
+		// c.fillStyle = '#fff';
+		clouds.forEach(q => {
+			c.save();
+			c.beginPath();
+			c.fillStyle = colorToHex(q.clr);
+			c.translate(...w2s(q.c));
+			c.rotate(q.pc[1] + (PI / 2));
+			const zr = q.r * zoom;
+			c.arc(0, 0, q.r * zoom, 0, 7);
+			[
+				[zr, zr * .2, .7],
+				[-zr, zr * .2, .7],
+				[zr * 1.8, zr * .45, .4],
+				[-zr * 1.8, zr * .35, .4],
+			].forEach(([x, y, r]) => {
+				c.arc(x, y, zr * r, 0, 7);
+			});
+
+			// [
+			// 	[[zr, zr * .3], .7],
+			// 	[[-zr, zr * .3], .7],
+			// 	[[zr * 1.8, zr * .4], .4],
+			// 	[[-zr * 1.8, zr * .4], .4],
+			// ].forEach(([offset, r]) => {
+			// 	c.arc(...addVectors(q.c, offset), zr * r, 0, 7);
+			// });
+
+			// c.arc(...w2s(q.c), q.r * zoom, 0, 7);
+			// [
+			// 	[[q.r, q.r * .3], .7],
+			// 	[[-q.r, q.r * .3], .7],
+			// 	[[q.r * 1.8, q.r * .4], .4],
+			// 	[[-q.r * 1.8, q.r * .4], .4],
+			// ].forEach(([offset, r]) => {
+			// 	c.arc(...w2s(addVectors(q.c, offset)), q.r * r * zoom, 0, 7);
+			// });
+			c.fill();
+			c.restore();
+		});
 		c.restore();
 	}
 
@@ -164,16 +215,24 @@ export const draw = (sims, particles, trajectories, missions, rainbow, e, r) => 
 		c.lineWidth = 6;
 		if (zoom > .07) drawText(o.completed ? '✅' : o.description, o.pos, color);
 	});
-	trajectories.forEach(traj => traj.forEach(pos => {
-		drawCircle(pos, 5, '#fff2');
-	}));
-	particles.ea((i, tLeft, x, y, z, vX, vY, vZ, r, g, b, a) => {
+	
+	// trajectories.forEach(traj => traj.forEach(pos => {
+	// 	drawCircle(pos, 5, '#fff2');
+	// }));
+	particles.ea((i, tLeft, x, y, z, vX, vY, vZ, ra, r, g, b, a, goalR, goalG, goalB, goalA) => {
 		// console.log(JSON.stringify(pos));
 		if (tLeft <= 0) return;
+		// console.log('render particle', { i, tLeft, x, y, z, vX, vY, vZ, ra, r, g, b, a });
 		// console.log(r,g, b, a,colorToHex(r, g, b, a) );
 		c.beginPath();
-		c.fillStyle = colorToHex(r, g, b, a);
-		c.arc(...w2s([x, y]), 4 + clamp(z / 20, -3, 3), 0, 7);
+		c.fillStyle = color255ToHex([r, g, b, a]);
+		// console.log('z', z, 'ra', ra, 'final', (1 + clamp(z / 20, -1, 1)) * ra);
+		const rad = (
+			(1 + clamp(z / 30, -1, 1)) * ra // Grow/shrink based on z coordinate
+		) * (
+			zoom > 1 ? zoom : (1 + zoom) / 2
+		);
+		c.arc(...w2s([x, y]), rad, 0, 7);
 		c.fill();
 		c.closePath();
 	});

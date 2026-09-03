@@ -11,3 +11,4 @@
 - https://xem.github.io/2Dphysics/
 - https://github.com/KilledByAPixel/ZzFX
 - https://xem.github.io/articles/jsgamesinputs.html
+- https://github.com/KilledByAPixel/LittleJS

@@ -9,13 +9,12 @@ import {
 	setDampeningForPressure, calcAltitude, calcPlanetGravity,
 } from './planet.js';
 import { getCollisionsById } from './physics-extensions.js';
-import { setPos, subtractVectors, clamp, sin, cos, PI, X, Y, angle2Vector, distance, magnitude, TWO_PI, addVectors, polar2Vector } from './utils.js';
+import {
+	setPos, subtractVectors, clamp, rand, 
+	PI, X, Y, angle2Vector, distance, magnitude, TWO_PI, addVectors, polar2Vector,
+} from './utils.js';
 import { missions } from './missions.js';
-
-
-// aka. (v1, v2) => Math.hypot(v2[X] - v1[X], v2[Y] - v1[Y]);
-                 
-
+import { clouds } from './clouds.js';
 
 // ---------- World ----------
 
@@ -23,8 +22,9 @@ zzfx(...[,,537,.02,.02,.22,1,1.59,-6.98,4.97]);
 
 const sims = [simFactory([0,0])]; // , simFactory()]; // You can have multiple simulations
 const s1 = sims[0];
-let look = [0, 0];
+let look = [0, -PLANET_RADIUS];
 let lookCooldown = 0;
+setCam(look, true);
 // s1.G[Y] = 0; // 0.005;
 // const rect = (w, h, cx, cy, w, h, m) => s1.shape(RECTANGLE, [400, 700], 0, 800, 30),
 const rect = (x, y, w, h) => s1.shape(RECTANGLE, [x, y], w * h, w, h);
@@ -72,6 +72,8 @@ const lookAtObj = (i) => {
 	lookCooldown = 2e3;
 	look = missions.current().objectives[i]?.pos;
 };
+
+// -------------------------- Interactions --------------------------------------------------------
 
 const commandQueue = [];
 const ks = {}; // { u: 0, r: 0, d: 0, l: 0, S: 0 };
@@ -144,7 +146,7 @@ onpointermove = e => {
 	// This function implements a 2-pointer horizontal pinch/zoom gesture
 	// Find this event in the cache and update its record with this event
 	const index = pinchEvents.findIndex(ev => ev.pointerId === e.pointerId);
-	this.pinchEvents[index] = ev;
+	pinchEvents[index] = e;
 	// If two pointers are down, check for pinch gestures
 	if (pinchEvents.length === 2) {
 		// Calculate the distance between the two pointers
@@ -200,7 +202,7 @@ const rocket = {
 	rotate(dir) { // Handle user input to move the ship left (-1) or right (1)
 		this.gimbalCooldown = 50;
 		this.gimbal(dir);
-		this.core.A += .05 * dir;
+		this.core.A += .07 * dir;
 	},
 	gimbal(n) {
 		const ogGim = this.gim;
@@ -233,7 +235,7 @@ const rocket = {
 		noz.F[X] = vec[X] * this.throttle * this.enginePower;
 		noz.F[Y] = vec[Y] * this.throttle * this.enginePower;
 		
-		if (Math.random() > this.throttle) return; // No particles
+		if (rand() > this.throttle) return; // No particles
 		[
 			[255, 0, 0],
 			[255, 100, 0],
@@ -242,11 +244,11 @@ const rocket = {
 			[0, 0, 255],
 		].forEach((col, i) => {
 			const vel = [
-				Math.random() * 2 - 1 - vec[X],
-				Math.random() * 2 - 1 - vec[Y],
-				Math.random() * 2 - 1
+				rand(2) - 1 - vec[X],
+				rand(2) - 1 - vec[Y],
+				rand(2) - 1
 			];
-			particles.new(2, [noz.c[X] + (i * 10) - 20, noz.c[Y], 0], vel, [...col, 255]);
+			particles.new(2, [noz.c[X] + (i * 10) - 20, noz.c[Y], 0], vel, 5, [...col, 255]);
 		});
 		// particles.new(1, [noz.c[X] - 20, noz.c[Y], 0], vel, [255, 0, 0, 255]);
 		// particles.new(1, [noz.c[X] - 10, noz.c[Y], 0], vel, [255, 100, 0, 255]);
@@ -310,7 +312,14 @@ const reset = () => {
 };
 reset();
 
+const rainbow = {
+	mag: 7e3, angle: -PI * .4, // coordinates
+	c: [0, 0], // center (position)
+	r: PLANET_RADIUS * .5, // size
+	w: 200,
+};
 
+// --------------------------------------- Calculations -------------------------------------------
 const calcPartsAltitude = parts =>
 	calcAltitude(parts.reduce((low, p) => Math.min(low, distance(p.c, [0, 0])), Infinity));
 
@@ -339,15 +348,9 @@ function calcTrajectory({ com, v, m }) {
 }
 
 // Other things to display
-const rainbow = {
-	mag: 7e3, angle: -PI * .4, // coordinates
-	c: [0, 0], // center (position)
-	r: PLANET_RADIUS * .5, // size
-	w: 200,
-};
 let trajectory = [];
 
-// Game loop
+// --------------------------------------- Game Loop and Render Loop ------------------------------
 const DT = 16;
 setInterval(() => {
 	if (commandQueue.length) {
@@ -363,7 +366,9 @@ setInterval(() => {
 	if (ks.C) rocket.increaseThrottle(-.008); // Ctrl
 	// if (ks.S) rocket.nextStage(); // Space
 
+	// FIXME: Update gravity for particles
 	particles.run();
+	clouds.run(DT, rocket);
 	for (let sim of sims) {
 		for (let o of sim.H) {
 			o.g = calcPlanetGravity(o.m, o.c);
@@ -399,7 +404,8 @@ const setText = (el, txt) => el.innerText !== txt && (el.innerText = txt);
 const render = () => {
 	setCam(look, lookCooldown < -2e3);
 	const speed = magnitude(rocket.compound.v);
-	draw(sims, particles, speed < .1 ? [] : [trajectory], missions, rainbow);
+	draw(DT, sims, particles, speed < .1 ? [] : [trajectory], missions, clouds, rainbow);
+	// ^ TODO: make the delta-t based on time elapsed since last render
 	const alt = calcPartsAltitude(rocket.compound.parts);
 	// altn.innerText = alt.toFixed(0).padStart(6, '0');
 	setText(altn, alt.toFixed(0).padStart(6, '0'));
@@ -422,4 +428,4 @@ const render = () => {
 
 requestAnimationFrame(render);
 
-window.g = { ks, rocket };
+window.g = { ks, rocket, clouds, particles };
