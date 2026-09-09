@@ -105,13 +105,21 @@
 			/* rotate: 90deg; */
 		}
 		.m {
-			padding: 2vh 4vw;
+			padding: 2vh 6vw;
+		}
+		#oc {
+			scale: 0;
+			max-height: 0;
+		}
+		#oc.show {
+			scale: 1;
+			max-height: 40vh;
 		}
 	</style>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 	<link rel=icon href=data:,>
 	<!-- <link rel=icon href="data:image/svg+xml,<svg xmlns=%22http://w3.org viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⛳</text></svg>"> -->
-  <script type="module" crossorigin src="./assets/index-PUgrn25g.js"></script>
+  <script type="module" crossorigin src="./assets/index-oPtrWI8Y.js"></script>
 </head>
 <body>
 <canvas id=a></canvas>
@@ -152,9 +160,13 @@
 	</b>
 	<b id=th>
 		<u data-key=u class=m>Burst Thrust [W,&uarr;]</u>
-		<br>
-		Mode: <i id=elMode></i>
-		<u data-key=T>Switch [Tab]</u>
+		<div id=oc>
+			Mode: <i id=elMode></i><br>
+			<u data-key=T>Switch Mode [Tab]</u>
+			<br>
+			<u data-key=B>Reset [Backspace]</u>
+		</div>
+		<u data-key=c>Other Controls [C]</u>
 	</b>
 </b>
 

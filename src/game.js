@@ -2,7 +2,7 @@ import { zzfx } from 'zzfx';
 
 import { simFactory, RECTANGLE, CIRCLE, SPRING, REPULSIVE, HINGE, FIXED } from './xem-physics-factory.js';
 import { particles } from './particles.js';
-import { draw, setCam, wheelZoom, incZoom, s2w } from './canvas-renderer.js';
+import { draw, setCam, wheelZoom, incZoom, s2w, ROYGBV } from './canvas-renderer.js';
 import {
 	PLANET_RADIUS, PLANET_CENTER, PLANET_MASS,
 	calcPressurePercentAtRadius,
@@ -12,6 +12,7 @@ import { getCollisionsById } from './physics-extensions.js';
 import {
 	setPos, subtractVectors, clamp, rand, 
 	PI, X, Y, angle2Vector, distance, magnitude, TWO_PI, addVectors, polar2Vector,
+	randBell, scale,
 } from './utils.js';
 import { missions } from './missions.js';
 import { clouds } from './clouds.js';
@@ -86,9 +87,10 @@ const kt = {
 	z: () => rocket.setThrottle(1),
 	x: () => rocket.setThrottle(0),
 	E: () => { if (missions.next()) { reset(); lookAtObj(0); } },
+	c: () => oc.classList.toggle('show'),
 };
 onkeydown = onkeyup = e => {
-	ks['BT***E**HC**************S****lurd************************l**r************q*d***ux*z***'[e.which-8]]=e.type[5]?1:0;
+	ks['BT***E**HC**************S****lurd************************l*cr************q*d***ux*z***'[e.which-8]]=e.type[5]?1:0;
 	// ks[e.key]=e.type[5]?1:0;
 	if (e.which > 186) ks['+*-'[e.which-187]]=e.type[5]?1:0;
 	e.preventDefault()
@@ -157,7 +159,7 @@ onpointermove = e => {
 			return;
 		}
 		const dd = curDiff - pinchPrevDiff;
-		incZoom(dd / 100);
+		incZoom(dd / 120);
 		// Cache the distance for the next move event
 		pinchPrevDiff = curDiff;
 	}
@@ -177,11 +179,13 @@ const npr = (x, y, w, h) => {
 	r.f = 0.1;
 };
 npr(0, -PLANET_RADIUS, 440, 40); // Platform
-npr(-14, -PLANET_RADIUS - 50, 10, 60);
-npr(14, -PLANET_RADIUS - 50, 10, 60);
-s1.shape(RECTANGLE, [300, -PLANET_RADIUS - 100], 0, 100, 250); // Test building
+// npr(-14, -PLANET_RADIUS - 50, 10, 60);
+// npr(14, -PLANET_RADIUS - 50, 10, 60);
+const building = s1.shape(RECTANGLE, [330, -PLANET_RADIUS - 100], 0, 180, 250); // Test building
+building.emoji = '🦄';
+building.emojiSize = 40;
 
-const LAUNCHPAD_RESET_POS = [0, -PLANET_RADIUS - 40];
+const LAUNCHPAD_RESET_POS = [0, -PLANET_RADIUS - 60];
 
 const MODE_NAMES = ['Burst', 'Sustained Burn'];
 const rocket = {
@@ -192,10 +196,11 @@ const rocket = {
 			[16, 50, 0, 0], // body
 			[16, 16, 0, 25], // engine base
 			[12, 16], // engine nozzle
+			[6, 50, 20, 0], // Landing gear right
+			[6, 50, -20, 0], // Landing gear left
 		],
 		0, -PLANET_RADIUS * 1.1
 	),
-	get nozzle() { return this.compound.parts[4]; },
 	gim: 0,
 	deltaGim: .01,
 	rotate(dir) { // Handle user input to move the ship left (-1) or right (1)
@@ -235,13 +240,7 @@ const rocket = {
 		noz.F[Y] = vec[Y] * this.throttle * this.enginePower;
 		
 		if (rand() > this.throttle) return; // No particles
-		[
-			[255, 0, 0],
-			[255, 100, 0],
-			[255, 255, 0],
-			[0, 255, 0],
-			[0, 0, 255],
-		].forEach((col, i) => {
+		ROYGBV.forEach((col, i) => {
 			const vel = [
 				rand(2) - 1 - vec[X],
 				rand(2) - 1 - vec[Y],
@@ -262,18 +261,22 @@ const rocket = {
 		else this.gimbal(this.gim > 0 ? -2 : 2);
 	},
 };
-rocket.nose = rocket.compound.parts[0];
-rocket.core = rocket.compound.parts[1];
-rocket.body = rocket.compound.parts[2];
-rocket.engine = rocket.compound.parts[3];
+const { parts } = rocket.compound;
+rocket.nose = parts[0];
+rocket.core = parts[1];
+rocket.body = parts[2];
+rocket.engine = parts[3];
+rocket.nozzle = parts[4];
+rocket.landingR = parts[5];
+rocket.landingL = parts[6];
 // rocket.body.m /= 3;
 // rocket.body.f /= 10;
 // rocket.nozzle = rocket.compound.parts[2];
 
-const join = (part1, part2, offset1X = 0, offset1Y = 0, offset2X = 0, offset2Y = 0, type = FIXED) => {
+const join = (part1, part2, offset1X = 0, offset1Y = 0, offset2X = 0, offset2Y = 0, type = FIXED, str, len) => {
 	const a1 = s1.anchor(part1, [offset1X, offset1Y]);
 	const a2 = s1.anchor(part2, [offset2X, offset2Y]);
-	const j = s1.joint(type, part1, a1, part2, a2);
+	const j = s1.joint(type, part1, a1, part2, a2, str, len);
 	return { a1, a2, j };
 };
 // const a1 = s1.anchor(rocket.compound.parts[0], [0, 25]);
@@ -284,15 +287,29 @@ join(rocket.nose, rocket.core, 0, 8, 0, -4);
 join(rocket.core, rocket.body, 0, 4, 0, -25);
 join(rocket.body, rocket.engine, 0, 25, 0, -8);
 join(rocket.engine, rocket.nozzle, 0, 8, 0, -7);
+// join(rocket.body, rocket.landingR, 8, 20, -3, -25);
+// join(rocket.body, rocket.landingL, -8, 20, 3, -25);
+join(rocket.body, rocket.landingR, 8, 20, -3, -25, HINGE);
+join(rocket.body, rocket.landingL, -8, 20, 3, -25, HINGE);
+// join(rocket.engine, rocket.landingR, 0, 0, 0, -10, REPULSIVE, .2, 15);
+// join(rocket.engine, rocket.landingR, 0, 0, 0, -10, SPRING, .2, 15);
 
-console.log(rocket, planet);
+join(rocket.landingL, rocket.landingR, 0, 20, 0, 20, REPULSIVE, .2, 45);
+join(rocket.landingL, rocket.landingR, 0, 20, 0, 20, SPRING, 1, 35);
+
+// rocket.landingR.a += .4;
+// rocket.landingL.a -= .4;
+rocket.engine.color = '#ccc';
+rocket.nozzle.color = '#bbb';
+rocket.body.emoji = '🦄';
 
 const reset = () => {
+	missions.reset();
 	const offset = subtractVectors(LAUNCHPAD_RESET_POS, rocket.nozzle.c);
 	rocket.compound.parts.forEach(p => {
 		const desiredAngle = 0;
 		const da = desiredAngle - p.a; // Difference between desired angle and current angle (a)
-		console.log(p.a, da);
+		// console.log(p.a, da);
 		// Note: transform only updates the geometry (vertices, etc),
 		// and not the rotation state (a)
 		s1.transform(p, offset, da);
@@ -383,9 +400,19 @@ setInterval(() => {
 	trajectory = calcTrajectory(rocket.compound);
 
 	{ // Check rainbow
+		const { com } = rocket.compound;
 		rainbow.c = polar2Vector(rainbow.mag, rainbow.angle);
-		const d = distance(rocket.compound.com, rainbow.c);
-		if (Math.abs(d - rainbow.r) <= (rainbow.w/2)) rocket.refuel(3);
+		const d = distance(com, rainbow.c);
+		if (Math.abs(d - rainbow.r) <= (rainbow.w/2)) {
+			rocket.refuel(3);
+			if (rand() < .1) {
+				ROYGBV.forEach((col, i) => {
+					const c = addVectors(com, polar2Vector(rainbow.w, rand(TWO_PI)));
+					const vel = scale(subtractVectors(c, com), -.015);
+					particles.new(1, [...c, -20], [...vel, 1], 4, [...col, 100]);
+				});
+			}
+		}
 	}
 
 	// console.log(rocket.body.c[0], rocket.body.c[1]);

@@ -1,5 +1,5 @@
-import { PLANET_RADIUS } from './planet.js';
-import { distance } from './utils.js';
+import { ATMOS_RADIUS, PLANET_RADIUS } from './planet.js';
+import { distance, polar2Vector, TWO_PI, PI } from './utils.js';
 
 const enterZoneType = {
 	pos: [0, 0],
@@ -34,7 +34,40 @@ export const missions = [
 				r: 80,
 			},
 		]
-	}
+	},
+	{
+		objectives: [
+			{
+				...enterZoneType,
+				description: 'Refuel in Rainbows',
+				pos: [-320, -PLANET_RADIUS - 1400],
+			},
+			{
+				...enterZoneType,
+				description: 'Enter clouds to seed them',
+				r: 200,
+				pos: [-900, -PLANET_RADIUS - 3e3],
+			},
+		]
+	},
+	{
+		objectives: [
+			{
+				...enterZoneType,
+				description: 'Leave the atmosphere',
+				r: 400,
+				pos: [-2e3, -ATMOS_RADIUS - 400],
+			},
+		]
+	},
+	{
+		objectives: [0, 1, 2, 3, 4, 5, 6].map((n, i) => ({
+			...enterZoneType,
+			description: `Around the world ${i + 1}`,
+			r: 300,
+			pos: polar2Vector(ATMOS_RADIUS * .7, (TWO_PI * n / 7) - (PI/2.2)),
+		})),
+	},
 ];
 missions.index = 0;
 missions.next = () => {
@@ -47,5 +80,6 @@ missions.objs = (cb) => missions.current().objectives.forEach(cb);
 missions.check = (rkt) => missions.objs(o => {
 	if (!o.completed && o.check(rkt)) o.completed = new Date();
 });
+missions.reset = () => missions.objs(o => o.completed = 0);
 missions.completed = () => missions.current().objectives.reduce((sum, o) => sum + (o.completed ? 1 : 0), 0)
 	/ missions.current().objectives.length;

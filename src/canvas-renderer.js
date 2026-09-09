@@ -1,5 +1,13 @@
-import { colorToHex, color255ToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, polar2Vector } from './utils.js';
+import { colorToHex, color255ToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, sin } from './utils.js';
 import { PLANET_RADIUS, ATMOS_RADIUS, PLANET_CENTER } from './planet.js';
+
+export const ROYGBV = [
+	[255, 0, 0],
+	[255, 100, 0],
+	[255, 255, 0],
+	[0, 255, 0],
+	[0, 0, 255],
+];
 
 const c = a.getContext`2d`
 c.font = 'bold 50px Verdana';
@@ -16,7 +24,7 @@ export const s2w=(x,y)=>[(x - rendW) / zoom + cam[X], (y - rendH) / zoom + cam[Y
 export const w2s=([x,y])=>[(x - cam[X]) * zoom + rendW, (y - cam[Y]) * zoom + rendH];
 
 export const setCam = (goalCam, now) => cam = now ? [...goalCam] : lerpVectors(cam, goalCam, 0.1);
-const setZoom = z => { zoom = clamp(z, 0.005, 2);
+const setZoom = z => { zoom = clamp(z, 0.005, 2.5);
 	// console.log(zoom)
 };
 const ZOOM_SENSITIVITY = 0.0015;
@@ -35,6 +43,7 @@ function drawCircle([x, y], r, color, filled = 1) {
 }
 
 function drawText(text, pos, color, borderColor = '#fff', size = 18) {
+	c.save();
 	c.font = `bold ${Math.round((size + size * zoom) / 2)}px Verdana`;
 	c.textAlign = 'center';
 	c.textBaseline = 'middle';
@@ -43,6 +52,7 @@ function drawText(text, pos, color, borderColor = '#fff', size = 18) {
 	c.strokeStyle = borderColor;
 	c.strokeText(text, x, y);
 	c.fillText(text, x, y);
+	c.restore();
 }
 
 function getRainbowGradient(pos1, pos2, a = 'f') {
@@ -117,7 +127,9 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 			c.translate(...w2s(q.c));
 			c.rotate(q.pc[1] + (PI / 2));
 			const zr = q.r * zoom;
-			c.arc(0, 0, q.r * zoom, 0, 7);
+			// Add a throbbing sin wave element to the radius if we are seeding the cloud
+			const r = q.r + (q.seeding ? (q.r * .05 * sin(rt / 100)) : 0);
+			c.arc(0, 0, r * zoom, 0, 7);
 			[
 				[zr, zr * .2, .7],
 				[-zr, zr * .2, .7],
@@ -157,7 +169,7 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 		for (e of sim.H) {
 			if (e.e >= 0) {
 				// const color = sim.collisions?.[e.e] ? '#ccca' : e.d || '#fffc';
-				const color = e.color || '#fffc';
+				const color = e.color || '#eeef';
 				c.save(),
 				c.beginPath();
 				
@@ -180,26 +192,29 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 				c.fill(),
 				c.stroke()
 				c.restore();
+
+				if (e.emoji) {
+					drawText(e.emoji, e.c, '#fff', '#000', (e.emojiSize || 12) * zoom);
+				}
 			
 				// anchors
-				for (r of e.p) {
-					drawCircle(r, 3, '#6b6');
-				}
+				// for (r of e.p) {
+				// 	drawCircle(r, 3, '#6b6');
+				// }
 			} else {
 				// console.log(e);
 			}
 		}
 		
 		// joints
-		for(e of sim.J){
-			c.beginPath(),
-			c.strokeStyle="#fa0",
-			// TODO: Fix coordinates here
-			c.moveTo(e.A.p[e.a][0],e.A.p[e.a][1]),
-			c.lineTo(e.B.p[e.b][0],e.B.p[e.b][1]),
-			c.stroke(),
-			c.closePath()
-		}
+		// for(e of sim.J){
+		// 	c.beginPath(),
+		// 	c.strokeStyle="#fa0",
+		// 	c.moveTo(...w2s(e.A.p[e.a])),
+		// 	c.lineTo(...w2s(e.B.p[e.b])),
+		// 	c.stroke(),
+		// 	c.closePath()
+		// }
 	}
 	const now = new Date();
 	// drawText('🦄', cam);
@@ -212,7 +227,8 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 			addVectors(o.pos, [o.r, 0])
 		);
 		c.lineWidth = 8;
-		drawCircle(o.pos, o.r, color, 0);
+		const r =  o.r + (o.completed ? 0 : (o.r * .05 * sin(rt / 200)));
+		drawCircle(o.pos, r, color, 0);
 		c.lineWidth = 6;
 		if (zoom > .07) drawText(o.completed ? '✅' : o.description, o.pos, color);
 	});
