@@ -6,6 +6,7 @@ c.font = 'bold 50px Verdana';
 a.width = window.innerWidth - 2;
 a.height = window.innerHeight - 2;
 const rendW = a.width / 2, rendH = a.height / 2;
+let hq = 0; // High quality?
 let cam = [0, 0];
 let zoom = 1;
 let rt = 0; // Render time
@@ -83,7 +84,7 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 	// Draw rainbox
 	{
 		c.save();
-		c.filter = 'drop-shadow(0 0 12px #fff6)';
+		if (hq) c.filter = 'drop-shadow(0 0 12px #fff6)';
 		const rr = rainbow.r * zoom;
 		const rainbowWidth = rainbow.w * zoom;
 		const rc = w2s(rainbow.c);
@@ -107,7 +108,7 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 	// Draw clouds
 	{
 		c.save();
-		c.filter = 'blur(2px) drop-shadow(0 4px 8px #0003)';
+		if (hq) c.filter = 'blur(2px) drop-shadow(0 4px 8px #0003)';
 		// c.fillStyle = '#fff';
 		clouds.forEach(q => {
 			c.save();
@@ -230,7 +231,7 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 		const rad = (
 			(1 + clamp(z / 30, -1, 1)) * ra // Grow/shrink based on z coordinate
 		) * (
-			zoom > 1 ? zoom : (1 + zoom) / 2
+			zoom > 1 ? zoom : (1 + zoom) / 2 // Shrink less than usual when zoomed out
 		);
 		c.arc(...w2s([x, y]), rad, 0, 7);
 		c.fill();

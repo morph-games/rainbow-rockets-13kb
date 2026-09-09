@@ -157,8 +157,7 @@ onpointermove = e => {
 			return;
 		}
 		const dd = curDiff - pinchPrevDiff;
-		incZoom(dd / 10);
-		console.log('Diff of distance', dd);
+		incZoom(dd / 100);
 		// Cache the distance for the next move event
 		pinchPrevDiff = curDiff;
 	}
