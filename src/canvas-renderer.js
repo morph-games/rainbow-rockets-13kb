@@ -1,7 +1,7 @@
-import { colorToHex, color255ToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, sin } from './utils.js';
+import { colorToHex, color255ToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, sin, lerp } from './utils.js';
 import { PLANET_RADIUS, ATMOS_RADIUS, PLANET_CENTER } from './planet.js';
 
-export const ROYGBV = [
+export const ROYGB = [
 	[255, 0, 0],
 	[255, 100, 0],
 	[255, 255, 0],
@@ -17,6 +17,7 @@ const rendW = a.width / 2, rendH = a.height / 2;
 let hq = 0; // High quality?
 let cam = [0, 0];
 let zoom = 1;
+let goalZoom = 1;
 let rt = 0; // Render time
 // Screen to world
 export const s2w=(x,y)=>[(x - rendW) / zoom + cam[X], (y - rendH) / zoom + cam[Y]];
@@ -24,7 +25,7 @@ export const s2w=(x,y)=>[(x - rendW) / zoom + cam[X], (y - rendH) / zoom + cam[Y
 export const w2s=([x,y])=>[(x - cam[X]) * zoom + rendW, (y - cam[Y]) * zoom + rendH];
 
 export const setCam = (goalCam, now) => cam = now ? [...goalCam] : lerpVectors(cam, goalCam, 0.1);
-const setZoom = z => { zoom = clamp(z, 0.005, 2.5);
+const setZoom = z => { goalZoom = clamp(z, 0.005, 2.5);
 	// console.log(zoom)
 };
 const ZOOM_SENSITIVITY = 0.0015;
@@ -70,28 +71,56 @@ function getRainbowGradient(pos1, pos2, a = 'f') {
 	return grad
 }
 
+function drawRadialGradient(gradCenter, gradR, colors, center, r) {
+	c.save();
+	const gradientPos = w2s(gradCenter);
+	const gradient = c.createRadialGradient(...gradientPos, 0, ...gradientPos, gradR * zoom);
+	colors.forEach(([p, c]) => gradient.addColorStop(p, '#' + c));
+	c.beginPath();
+	c.arc(...w2s(center), r * zoom, 0, TWO_PI);
+	c.fillStyle = gradient;
+	c.fill();
+	c.restore();
+}
+
 export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbow, e, r) => {
 	rt += dt;
 	// reset canvas
 	a.width ^= 0;
 
-	// Draw the planet
-	const screenPos = w2s(PLANET_CENTER);
-	const gradient = c.createRadialGradient(...screenPos, 0, ...screenPos, ATMOS_RADIUS * zoom);
-	[
-		[0, 200, 200, 200, 1], // center
-		[.45, 200, 200, 255, 1],
-		[.5, 136, 204, 255, 1], // sky color #8cf
-		[.6, 136, 204, 255, .9], // sky
-		[.8, 100, 100, 255, .5],
-		[1, 255, 0, 200, .05], // blend red/purplish to nearly transparent
-	].forEach(([p, r, g, b, a]) => gradient.addColorStop(p, `rgba(${r},${g},${b},${a})`));
-	c.beginPath();
-	c.arc(...screenPos, ATMOS_RADIUS * zoom, 0, TWO_PI);
-	c.fillStyle = gradient;
-	c.fill();
+	zoom = lerp(zoom, goalZoom, 0.5);
 
-	// Draw rainbox
+	// Draw the planet's Sky
+	drawRadialGradient(
+		PLANET_CENTER,
+		ATMOS_RADIUS,
+		[
+			[0, 'cccf'], // center
+			[.45, 'ccff'],
+			[.5, '8cff'], // sky color #8cf
+			[.6, '8cfd'], // sky
+			[.8, '6464ff80'],
+			[1, 'ff00c80d'], // blend red/purplish to nearly transparent
+		],
+		PLANET_CENTER,
+		ATMOS_RADIUS
+	);
+	// Sky shadow
+	drawRadialGradient(
+		addVectors(PLANET_CENTER, [-PLANET_RADIUS / 10, -PLANET_RADIUS * 1.2]),
+		ATMOS_RADIUS * 1.8,
+		[
+			[0, '0000'],
+			[.45, '0000'],
+			[.5, '5051'],
+			[.55, '0009'],
+			[1, '000a'],
+		],
+		PLANET_CENTER,
+		ATMOS_RADIUS
+	);
+
+	// Draw rainbow
 	{
 		c.save();
 		if (hq) c.filter = 'drop-shadow(0 0 12px #fff6)';
@@ -114,6 +143,18 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 		c.stroke();
 		c.restore();
 	}
+
+	// Draw the planet
+	drawRadialGradient(
+		addVectors(PLANET_CENTER, [-PLANET_RADIUS / 10, -PLANET_RADIUS * .8]),
+		PLANET_RADIUS * 1.1,
+		[
+			[0, '4ab'],
+			[1, '021'],
+		],
+		PLANET_CENTER,
+		PLANET_RADIUS,
+	);
 
 	// Draw clouds
 	{
@@ -190,7 +231,7 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 				
 				c.closePath(),
 				c.fill(),
-				c.stroke()
+				c.stroke();
 				c.restore();
 
 				if (e.emoji) {
@@ -216,6 +257,7 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 		// 	c.closePath()
 		// }
 	}
+
 	const now = new Date();
 	// drawText('🦄', cam);
 	missions.objs(o => {

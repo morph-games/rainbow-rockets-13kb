@@ -61,6 +61,16 @@ export const missions = [
 		]
 	},
 	{
+		objectives: [
+			{
+				...enterZoneType,
+				pos: [0, PLANET_RADIUS + 30],
+				r: 200,
+				description: 'Land on the dark side',
+			},
+		]
+	},
+	{
 		objectives: [0, 1, 2, 3, 4, 5, 6].map((n, i) => ({
 			...enterZoneType,
 			description: `Around the world ${i + 1}`,

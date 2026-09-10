@@ -8,6 +8,7 @@ export const color255ToHex = (color) => {
 	return `#${color.map(n=>(floor(Number(n))).toString(16).padStart(2, '0')).join('')}`;
 };
 export const clamp = (n, minA = 0, maxB = 1) => min(max(n, minA), maxB);
+export const lerp = (start, end, t) => start * (1 - t) + end * t;
 export const angle2Vector = (a) => [cos(a), sin(a)];
 export const magnitude = ([x, y]) => hypot(x, y); // aka. length
 export const vector2Polar = ([x, y]) => ({ angle: Math.atan2(y, x), magnitude: hypot(x, y) });

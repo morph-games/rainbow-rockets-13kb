@@ -2,7 +2,7 @@ import { zzfx } from 'zzfx';
 
 import { simFactory, RECTANGLE, CIRCLE, SPRING, REPULSIVE, HINGE, FIXED } from './xem-physics-factory.js';
 import { particles } from './particles.js';
-import { draw, setCam, wheelZoom, incZoom, s2w, ROYGBV } from './canvas-renderer.js';
+import { draw, setCam, wheelZoom, incZoom, s2w, ROYGB } from './canvas-renderer.js';
 import {
 	PLANET_RADIUS, PLANET_CENTER, PLANET_MASS,
 	calcPressurePercentAtRadius,
@@ -172,7 +172,7 @@ onwheel = (e) => { /* e.preventDefault(); */ wheelZoom(e.deltaY); }
 // TODO: Debug weird bug where first shape created is not moving
 // Make the physical planet
 const planet = s1.shape(CIRCLE, PLANET_CENTER, 0, PLANET_RADIUS);
-planet.color = '#064';
+planet.color = '#0000'; // Transparent - draw as a special thing in the renderer
 // Non-Physical Rectangles
 const npr = (x, y, w, h) => {
 	const r = s1.shape(RECTANGLE, [x, y], 0, w, h);
@@ -240,7 +240,7 @@ const rocket = {
 		noz.F[Y] = vec[Y] * this.throttle * this.enginePower;
 		
 		if (rand() > this.throttle) return; // No particles
-		ROYGBV.forEach((col, i) => {
+		ROYGB.forEach((col, i) => {
 			const vel = [
 				rand(2) - 1 - vec[X],
 				rand(2) - 1 - vec[Y],
@@ -320,6 +320,7 @@ const reset = () => {
 		p.A = 0;
 	});
 	rocket.engineOn = 0;
+	rocket.refuel(1e6);
 	// rocket.compound.parts.forEach(p => {
 	// 	s1.transform(p, offset, 0);
 	// });
@@ -406,7 +407,7 @@ setInterval(() => {
 		if (Math.abs(d - rainbow.r) <= (rainbow.w/2)) {
 			rocket.refuel(3);
 			if (rand() < .1) {
-				ROYGBV.forEach((col, i) => {
+				ROYGB.forEach((col, i) => {
 					const c = addVectors(com, polar2Vector(rainbow.w, rand(TWO_PI)));
 					const vel = scale(subtractVectors(c, com), -.015);
 					particles.new(1, [...c, -20], [...vel, 1], 4, [...col, 100]);
