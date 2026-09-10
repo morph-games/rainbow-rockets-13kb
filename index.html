@@ -30,6 +30,9 @@
 			background: #0004;
 			box-shadow: 0 .5em .25em #0002;
 		}
+		u:hover {
+			background: #0006;
+		}
 		u:active {
 			scale: 0.92;
 			background: #0006;
@@ -115,6 +118,31 @@
 			scale: 1;
 			max-height: 40vh;
 		}
+		#spl {
+			display: none;
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			text-align: center;
+			color: #fff;
+			background: linear-gradient(45deg, #f00a, #f70a, #ee0a, #3c0a, #22ea, #c0ca);
+		}
+		h1 {
+			transform: skew(-2deg, -15deg);
+			 text-shadow: 
+			 	2px 2px 0 #f07,
+				4px 4px 0 #f07,
+				6px 6px 0 #f07,
+				10px 10px 0 #22e,
+				14px 14px 0 #70f,
+				7px 7px 1em #0007;
+			font-size: 10vmin;
+			text-transform: uppercase;
+			margin: 1em 0;
+			letter-spacing: .2em;
+		}
 	</style>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 	<link rel=icon href=data:,>
@@ -153,10 +181,11 @@
 		<u data-key=C>&darr; [Ctrl, X]</u>
 		<u data-key=H>&uarr; [Shift, Z]</u>
 	</b>
+	<!-- TODO: Navbar -->
+	<!--
 	<b>
-		<!-- TODO: Navbar -->
-		
 	</b>
+	-->
 	<b id=th>
 		<u data-key=u class=m>Burst Thrust [W,&uarr;]</u>
 		<div id=oc>
@@ -168,25 +197,12 @@
 		<u data-key=c>Other Controls [C]</u>
 	</b>
 </b>
-
-<!--
-<b id=alt>Altitude: <i id=altn></i><br>
-	<progress id=atmos value=0 max=1></progress>
-	<div>Atmosphere</div>
+<b id=spl>
+	Unicorn Space Program
+	<h1>Rainbow</h1>
+	<h1>Rockets</h1>
+	<u data-key=u>Start [Enter]</u>
 </b>
--->
-
-<!--
-<b id=msn>
-	Mission <i id=msnnum></i>/<i id=msntot></i>
-	<br>
-	<ol id=msnos>
-		<li>Do thing</li>
-		<li>Do another thing</li>
-	</ol>
-	<div id=msndone></div>
-</b>
--->
 </body>
 <script type="module" src="./src/game.js"></script>
 </html>

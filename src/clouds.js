@@ -38,11 +38,14 @@ let selfSeedingCloudIndex = 0;
 clouds.run = (dt, rkt) => {
 	const { com } = rkt.compound;
 	cloudTime += dt;
+	let rainDoneAngle = 0;
 	clouds.forEach((q, i) => {
 		const d = distance(com, q.c);
 		if (q.raining) {
-			if (q.wtr <= 0) q.raining = 0;
-			else q.wtr -= rand(.001);
+			if (q.wtr <= 0) {
+				q.raining = 0;
+				rainDoneAngle = q.pc[1];
+			} else q.wtr -= rand(.001);
 			// Chance of spawning a rain drop particle
 			if (rand() < (q.wtr < .5 ? .1 : .2)) {
 				const v = normalize(subtractVectors(PLANET_CENTER, q.c), 10);
@@ -101,4 +104,5 @@ clouds.run = (dt, rkt) => {
 		// 	[...q.clr]
 		// );
 	});
+	return rainDoneAngle;
 }

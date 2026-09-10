@@ -1,4 +1,4 @@
-export const { sin, cos, hypot, min, max, PI, random, round, floor } = Math;
+export const { sin, cos, hypot, min, max, PI, random, round, floor, atan2 } = Math;
 export const X = 0, Y = 1;
 export const TWO_PI = PI * 2;
 export const colorTo255 = (color) => color.map(n => round(n * 255));
@@ -10,8 +10,9 @@ export const color255ToHex = (color) => {
 export const clamp = (n, minA = 0, maxB = 1) => min(max(n, minA), maxB);
 export const lerp = (start, end, t) => start * (1 - t) + end * t;
 export const angle2Vector = (a) => [cos(a), sin(a)];
+export const vectorAngle = ([x, y]) => atan2(y, x);
 export const magnitude = ([x, y]) => hypot(x, y); // aka. length
-export const vector2Polar = ([x, y]) => ({ angle: Math.atan2(y, x), magnitude: hypot(x, y) });
+export const vector2Polar = ([x, y]) => ({ angle: atan2(y, x), magnitude: hypot(x, y) });
 export const polar2Vector = (magnitude, angle = 0) => [magnitude * cos(angle), magnitude * sin(angle)];
 // ^ Note: Angle zero is to the right
 export const distance = ([x1, y1], [x2, y2]) => hypot(x2 - x1, y2 - y1);
@@ -23,6 +24,7 @@ export const normalize = (v, length = 1) => {
 	const len = magnitude(v);
 	return len ? scale(v, length/len) : [0, length];
 };
+export const perpendicular = ([x, y], ccw = 0) => ccw ? [-y, x] : [y, -x]; // clockwise by default
 // a = start vector, b = end vector, t = interpolation factor 0-1
 export const lerpVectors = (a, b, t) => [a[X] + (b[X] - a[X]) * t, a[Y] + (b[Y] - a[Y]) * t];
 export const rand = (a = 1, b = 0) => b + random() * (a - b);

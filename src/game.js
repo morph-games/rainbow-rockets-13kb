@@ -12,10 +12,11 @@ import { getCollisionsById } from './physics-extensions.js';
 import {
 	setPos, subtractVectors, clamp, rand, 
 	PI, X, Y, angle2Vector, distance, magnitude, TWO_PI, addVectors, polar2Vector,
-	randBell, scale,
+	randBell, scale, perpendicular,
 } from './utils.js';
 import { missions } from './missions.js';
 import { clouds } from './clouds.js';
+import { rainbows } from './rainbows.js';
 
 // ---------- World ----------
 
@@ -95,7 +96,7 @@ onkeydown = onkeyup = e => {
 	if (e.which > 186) ks['+*-'[e.which-187]]=e.type[5]?1:0;
 	e.preventDefault()
 	Object.keys(kt).forEach(k => ks[k] && kt[k]?.());
-	console.log(e.key, e.key.charCodeAt(), e.which, JSON.stringify(ks));
+	// console.log(e.key, e.key.charCodeAt(), e.which, JSON.stringify(ks));
 }
 // onkeydown = e => console.log(e, e.type[5], e.which);
 // onkeyup = e => console.log(e, e.type[5]);
@@ -174,20 +175,23 @@ onwheel = (e) => { /* e.preventDefault(); */ wheelZoom(e.deltaY); }
 const planet = s1.shape(CIRCLE, PLANET_CENTER, 0, PLANET_RADIUS);
 planet.color = '#0000'; // Transparent - draw as a special thing in the renderer
 // Non-Physical Rectangles
-const npr = (x, y, w, h) => {
+const npr = (x, y, w, h, em, ems) => {
 	const r = s1.shape(RECTANGLE, [x, y], 0, w, h);
 	r.f = 0.1;
+	r.emoji = em;
+	r.emojiSize = ems;
+	return r;
 };
-npr(0, -PLANET_RADIUS, 440, 40); // Platform
+npr(0, -PLANET_RADIUS, 440, 40, '🚀Launchpad', 18); // Platform
 // npr(-14, -PLANET_RADIUS - 50, 10, 60);
 // npr(14, -PLANET_RADIUS - 50, 10, 60);
-const building = s1.shape(RECTANGLE, [330, -PLANET_RADIUS - 100], 0, 180, 250); // Test building
-building.emoji = '🦄';
-building.emojiSize = 40;
+npr(330, -PLANET_RADIUS - 110, 180, 250, '🦄HQ', 50); // Building
+npr(-1750, -PLANET_RADIUS + 140, 400, 160, '🌈', 50);
 
 const LAUNCHPAD_RESET_POS = [0, -PLANET_RADIUS - 60];
 
 const MODE_NAMES = ['Burst', 'Sustained Burn'];
+const NOZ_H = 16;
 const rocket = {
 	compound: makeCompound(
 		[
@@ -195,7 +199,7 @@ const rocket = {
 			[16, 8], // probe core
 			[16, 50, 0, 0], // body
 			[16, 16, 0, 25], // engine base
-			[12, 16], // engine nozzle
+			[12, NOZ_H], // engine nozzle
 			[6, 50, 20, 0], // Landing gear right
 			[6, 50, -20, 0], // Landing gear left
 		],
@@ -203,14 +207,17 @@ const rocket = {
 	),
 	gim: 0,
 	deltaGim: .01,
+	rotateLand() {
+		// TODO: Rotate the base of the rocket to the land
+	},
 	rotate(dir) { // Handle user input to move the ship left (-1) or right (1)
 		this.gimbalCooldown = 50;
-		this.gimbal(dir);
+		this.gimbal(-dir);
 		this.core.A += .07 * dir;
 	},
 	gimbal(n) {
 		const ogGim = this.gim;
-		this.gim = clamp(this.gim + n * this.deltaGim, -.7, .7);
+		this.gim = clamp(this.gim + n * this.deltaGim, -.9, .9);
 		const dg = ogGim - this.gim;
 		this.nozzle.a += dg;
 		// console.log(this.nozzle.a, this.engine.a);
@@ -221,7 +228,7 @@ const rocket = {
 	refuel(dr) { this.setFuel(this.fuel + dr); },
 	engineOn: 0,
 	enginePower: 0.4,
-	throttle: 0.4,
+	throttle: 1, // 0.4,
 	maxThrottle: 1,
 	setThrottle(t) { this.throttle = clamp(t, 0, this.maxThrottle);	},
 	increaseThrottle(dt) { this.setThrottle(this.throttle + dt); },
@@ -232,7 +239,8 @@ const rocket = {
 		this.refuel(-.3 * this.throttle);
 		if (this.fuel <= 0) return;
 		const noz = this.nozzle;
-		const vec = angle2Vector(noz.a - PI/2);
+		const vec = angle2Vector(noz.a + this.gim - PI/2);
+		// console.log(noz.a, vec, this.gim);
 		// Old method involved applying to velocity
 		// noz.v[X] += vec[X] * this.throttle * this.enginePower;
 		// noz.v[Y] += vec[Y] * this.throttle * this.enginePower;
@@ -242,11 +250,17 @@ const rocket = {
 		if (rand() > this.throttle) return; // No particles
 		ROYGB.forEach((col, i) => {
 			const vel = [
-				rand(2) - 1 - vec[X],
-				rand(2) - 1 - vec[Y],
+				rand(2) - 1 - vec[X] * 3,
+				rand(2) - 1 - vec[Y] * 3,
 				rand(2) - 1
 			];
-			particles.new(2, [noz.c[X] + (i * 10) - 20, noz.c[Y], 0], vel, 5, [...col, 255]);
+			const p = addVectors(
+				addVectors(noz.c, scale(vec, -NOZ_H / 2)), // Bottom of nozzle
+				scale(perpendicular(vec), (i * -8) + 16)
+			);
+			
+			// particles.new(2, [p[X] + (i * 8) - 16, p[Y], 0], vel, 4, [...col, 255]);
+			particles.new(2, [...p, 0], vel, 4, [...col, 255]);
 		});
 		// particles.new(1, [noz.c[X] - 20, noz.c[Y], 0], vel, [255, 0, 0, 255]);
 		// particles.new(1, [noz.c[X] - 10, noz.c[Y], 0], vel, [255, 100, 0, 255]);
@@ -329,13 +343,6 @@ const reset = () => {
 };
 reset();
 
-const rainbow = {
-	mag: 7e3, angle: -PI * .4, // coordinates
-	c: [0, 0], // center (position)
-	r: PLANET_RADIUS * .5, // size
-	w: 200,
-};
-
 // --------------------------------------- Calculations -------------------------------------------
 const calcPartsAltitude = parts =>
 	calcAltitude(parts.reduce((low, p) => Math.min(low, distance(p.c, [0, 0])), Infinity));
@@ -373,7 +380,8 @@ setInterval(() => {
 	if (commandQueue.length) {
 		if (commandQueue.shift() === 'reset') reset();
 	}
-	if (ks.d) rocket.nozzle.v[Y] -= .3;
+	// if (ks.d) rocket.nozzle.v[Y] -= .3;
+	if (ks.d) rocket.rotateLand();
 	if (ks.l) rocket.rotate(-1);
 	if (ks.r) rocket.rotate(1);
 	if (ks.u) rocket.thrust();
@@ -385,7 +393,7 @@ setInterval(() => {
 
 	// FIXME: Update gravity for particles
 	particles.run();
-	clouds.run(DT, rocket);
+	let rda = clouds.run(DT, rocket);
 	for (let sim of sims) {
 		for (let o of sim.H) {
 			o.g = calcPlanetGravity(o.m, o.c);
@@ -399,22 +407,24 @@ setInterval(() => {
 	rocket.run(DT);
 	rocket.compound.calc();
 	trajectory = calcTrajectory(rocket.compound);
+	rainbows.run(DT, rocket, rda);
 
-	{ // Check rainbow
-		const { com } = rocket.compound;
-		rainbow.c = polar2Vector(rainbow.mag, rainbow.angle);
-		const d = distance(com, rainbow.c);
-		if (Math.abs(d - rainbow.r) <= (rainbow.w/2)) {
-			rocket.refuel(3);
-			if (rand() < .1) {
-				ROYGB.forEach((col, i) => {
-					const c = addVectors(com, polar2Vector(rainbow.w, rand(TWO_PI)));
-					const vel = scale(subtractVectors(c, com), -.015);
-					particles.new(1, [...c, -20], [...vel, 1], 4, [...col, 100]);
-				});
-			}
-		}
-	}
+	// { // Check rainbow
+	// 	const rainbow = rainbows[0];
+	// 	const { com } = rocket.compound;
+	// 	rainbow.c = polar2Vector(rainbow.mag, rainbow.angle);
+	// 	const d = distance(com, rainbow.c);
+	// 	if (Math.abs(d - rainbow.r) <= (rainbow.w/2)) {
+	// 		rocket.refuel(3);
+	// 		if (rand() < .1) {
+	// 			ROYGB.forEach((col, i) => {
+	// 				const c = addVectors(com, polar2Vector(rainbow.w, rand(TWO_PI)));
+	// 				const vel = scale(subtractVectors(c, com), -.015);
+	// 				particles.new(1, [...c, -20], [...vel, 1], 4, [...col, 100]);
+	// 			});
+	// 		}
+	// 	}
+	// }
 
 	// console.log(rocket.body.c[0], rocket.body.c[1]);
 	// console.log(sim1.M().length, sims[1].M().length);
@@ -431,7 +441,7 @@ const setText = (el, txt) => el.innerText !== txt && (el.innerText = txt);
 const render = () => {
 	setCam(look, lookCooldown < -2e3);
 	const speed = magnitude(rocket.compound.v);
-	draw(DT, sims, particles, speed < .1 ? [] : [trajectory], missions, clouds, rainbow);
+	draw(DT, sims, particles, speed < .1 ? [] : [trajectory], missions, clouds, rainbows, rocket);
 	// ^ TODO: make the delta-t based on time elapsed since last render
 	const alt = calcPartsAltitude(rocket.compound.parts);
 	// altn.innerText = alt.toFixed(0).padStart(6, '0');

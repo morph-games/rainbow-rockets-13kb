@@ -1,4 +1,7 @@
-import { colorToHex, color255ToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, sin, lerp } from './utils.js';
+import { colorToHex, color255ToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, sin, lerp,
+	scale, vector2Polar, polar2Vector, magnitude, 
+	subtractVectors,
+	vectorAngle} from './utils.js';
 import { PLANET_RADIUS, ATMOS_RADIUS, PLANET_CENTER } from './planet.js';
 
 export const ROYGB = [
@@ -14,6 +17,7 @@ c.font = 'bold 50px Verdana';
 a.width = window.innerWidth - 2;
 a.height = window.innerHeight - 2;
 const rendW = a.width / 2, rendH = a.height / 2;
+const avgRendDim = (rendW + rendH) / 2;
 let hq = 0; // High quality?
 let cam = [0, 0];
 let zoom = 1;
@@ -43,13 +47,14 @@ function drawCircle([x, y], r, color, filled = 1) {
 	c.closePath();
 }
 
-function drawText(text, pos, color, borderColor = '#fff', size = 18) {
+function drawText(text, pos, color, borderColor = '#fff', size = 18, lw = 8) {
 	c.save();
 	c.font = `bold ${Math.round((size + size * zoom) / 2)}px Verdana`;
 	c.textAlign = 'center';
 	c.textBaseline = 'middle';
 	const [x, y] = w2s(pos);
 	c.fillStyle = color;
+	c.lineWidth = lw;
 	c.strokeStyle = borderColor;
 	c.strokeText(text, x, y);
 	c.fillText(text, x, y);
@@ -83,7 +88,9 @@ function drawRadialGradient(gradCenter, gradR, colors, center, r) {
 	c.restore();
 }
 
-export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbow, e, r) => {
+export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbows, rkt,
+	e, r
+) => {
 	rt += dt;
 	// reset canvas
 	a.width ^= 0;
@@ -120,28 +127,30 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 		ATMOS_RADIUS
 	);
 
-	// Draw rainbow
-	{
-		c.save();
-		if (hq) c.filter = 'drop-shadow(0 0 12px #fff6)';
-		const rr = rainbow.r * zoom;
-		const rainbowWidth = rainbow.w * zoom;
-		const rc = w2s(rainbow.c);
-		const grad = c.createRadialGradient(...rc, rr + rainbowWidth/2, ...rc, rr - rainbowWidth/2);
-		[
-			[0, 'f00'], // red
-			[.2, 'f70'], // orange
-			[.4, 'ee0'], // yellow
-			[.6, '3c0'], // green
-			[.8, '22e'], // blue
-			[1, 'c0c'], // purple
-		].forEach(([n, rgb]) => grad.addColorStop(n, `#${rgb}c`));
-		c.beginPath();
-		c.arc(...rc, rr, 0, TWO_PI);
-		c.lineWidth = rainbowWidth;
-		c.strokeStyle = grad;
-		c.stroke();
-		c.restore();
+	// Draw rainbows
+	for (let rb of rainbows) {
+		if (rb.w && rb.lft) {
+			c.save();
+			if (hq) c.filter = 'drop-shadow(0 0 12px #fff6)';
+			const rr = rb.r * zoom;
+			const rainbowWidth = rb.w * zoom;
+			const rc = w2s(rb.c);
+			const grad = c.createRadialGradient(...rc, rr + rainbowWidth/2, ...rc, rr - rainbowWidth/2);
+			[
+				[0, 'f00'], // red
+				[.2, 'f70'], // orange
+				[.4, 'ee0'], // yellow
+				[.6, '3c0'], // green
+				[.8, '22e'], // blue
+				[1, 'c0c'], // purple
+			].forEach(([n, rgb]) => grad.addColorStop(n, `#${rgb}c`));
+			c.beginPath();
+			c.arc(...rc, rr, 0, TWO_PI);
+			c.lineWidth = rainbowWidth;
+			c.strokeStyle = grad;
+			c.stroke();
+			c.restore();
+		}
 	}
 
 	// Draw the planet
@@ -235,7 +244,7 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 				c.restore();
 
 				if (e.emoji) {
-					drawText(e.emoji, e.c, '#fff', '#000', (e.emojiSize || 12) * zoom);
+					drawText(e.emoji, e.c, '#fff', '#888', (e.emojiSize || 12) * zoom, 4);
 				}
 			
 				// anchors
@@ -295,4 +304,43 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 		c.fill();
 		c.closePath();
 	});
+
+	const rendUnit = avgRendDim / 4;
+	const rendCenter = [rendW, rendH];
+	function drawGuideLine(angle, dist, color) {
+		c.save();
+		c.beginPath();
+		// c.moveTo(rendW, rendH);
+		const d = clamp(dist, 0, 1);
+		const len = (rendUnit * d) + (rendUnit * 1.3);
+		c.moveTo(...addVectors(rendCenter, polar2Vector(len, angle)))
+		c.lineTo(...addVectors(rendCenter, polar2Vector(len + (rendUnit * .2), angle)));
+		c.lineWidth = 4;
+		c.lineCap = 'round';
+		c.strokeStyle = color;
+		c.stroke();
+		c.restore();
+	}
+
+	{
+		const { v, com } = rkt.compound;
+		const vp = vector2Polar(v);
+		const speed = magnitude(v);
+		if (speed > 1) {
+			drawGuideLine(vp.angle, 1, '#f9fc');
+		}
+		const vectorToPlanet = vector2Polar(subtractVectors(PLANET_CENTER, com));
+		const height = vectorToPlanet.magnitude - PLANET_RADIUS;
+		if (height > 500) {
+			drawGuideLine(vectorToPlanet.angle, height / 500, '#3c36');
+		}
+		if (height > 500 || speed > 1) {
+			drawGuideLine(rkt.core.a - (PI/2), 1, '#3333');
+			const openObjectives = missions.current().objectives.filter(o => !o.completed);
+			if (openObjectives.length) {
+				const diff = vector2Polar(subtractVectors(openObjectives[0].pos, com));
+				drawGuideLine(diff.angle, diff.magnitude / 100, '#ff0a');
+			}
+		}
+	}
 };
