@@ -84,8 +84,7 @@ clouds.run = (dt, rkt) => {
 					2,
 					[
 						com[0] + randBell(q.r),
-						com[1] + randBell(q.r),
-						0
+						com[1] + randBell(q.r)
 					],
 					[
 						vx + rand(-2, 2),
@@ -94,6 +93,7 @@ clouds.run = (dt, rkt) => {
 					],
 					10,
 					colorTo255([q.clr[0], q.clr[1], q.clr[2], .5]),
+					colorTo255([q.clr[0], q.clr[1], q.clr[2], 0]),
 				);
 			}
 		}

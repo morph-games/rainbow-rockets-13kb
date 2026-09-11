@@ -1,4 +1,5 @@
-import { colorToHex, color255ToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, sin, lerp,
+import { colorToHex, color255ToHex, clamp, X, Y, PI, TWO_PI, lerpVectors, addVectors, sin, cos,
+	lerp, rand, randBell,
 	scale, vector2Polar, polar2Vector, magnitude, 
 	subtractVectors,
 	vectorAngle} from './utils.js';
@@ -18,24 +19,34 @@ a.width = window.innerWidth - 2;
 a.height = window.innerHeight - 2;
 const rendW = a.width / 2, rendH = a.height / 2;
 const avgRendDim = (rendW + rendH) / 2;
+const rendUnit = avgRendDim / 4;
+const rendCenter = [rendW, rendH];
 let hq = 0; // High quality?
 let cam = [0, 0];
 let zoom = 1;
 let goalZoom = 1;
+let zoomSpeed = .5; // How fast the zoom lerps to goalZoom
 let rt = 0; // Render time
 // Screen to world
-export const s2w=(x,y)=>[(x - rendW) / zoom + cam[X], (y - rendH) / zoom + cam[Y]];
+export const s2w = (x,y) => [(x - rendW) / zoom + cam[X], (y - rendH) / zoom + cam[Y]];
 // World to screen
-export const w2s=([x,y])=>[(x - cam[X]) * zoom + rendW, (y - cam[Y]) * zoom + rendH];
+export const w2s = ([x,y], z = zoom)=>[(x - cam[X]) * z + rendW, (y - cam[Y]) * z + rendH];
 
 export const setCam = (goalCam, now) => cam = now ? [...goalCam] : lerpVectors(cam, goalCam, 0.1);
-const setZoom = z => { goalZoom = clamp(z, 0.005, 2.5);
+export const setZoom = (z, goalOnly) => {
+	if (!goalOnly) zoom = z;
+	goalZoom = z;
+};
+export const setZoomSpeed = (s = .5) => zoomSpeed = s;
+const updateZoom = z => {
+	goalZoom = clamp(z, 0.005, 2.5);
 	// console.log(zoom)
 };
+export const getZoom = () => zoom;
 const ZOOM_SENSITIVITY = 0.0015;
 // event.deltaY is positive when scrolling down (zoom out), negative when scrolling up (zoom in)
-export const wheelZoom = deltaY => setZoom(zoom * Math.exp(-event.deltaY * ZOOM_SENSITIVITY));
-export const incZoom = n => setZoom(zoom + n);
+export const wheelZoom = deltaY => updateZoom(zoom * Math.exp(-event.deltaY * ZOOM_SENSITIVITY));
+export const incZoom = n => updateZoom(zoom + n);
 
 function drawCircle([x, y], r, color, filled = 1) {
 	c.beginPath();
@@ -88,14 +99,91 @@ function drawRadialGradient(gradCenter, gradR, colors, center, r) {
 	c.restore();
 }
 
-export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbows, rkt,
-	e, r
+function drawGuideLine(angle, dist, color, type = 0) {
+	// Types:
+	// 0 = basic arrow
+	// 1 = no point
+	// 2 = speed (no base)
+	// 3 = flat
+	c.save();
+	c.beginPath();
+	let arrowAngle = .75;
+	if (type === 3) arrowAngle = .5;
+	else if (type === 2) arrowAngle = .68;
+	arrowAngle *= PI;
+	// let arrowAngle = PI * (type === 3 ? .5 : .8);
+	let arrowLength = 10;
+	// c.moveTo(rendW, rendH);
+	const d = clamp(dist, 0, 1);
+	const len = (rendUnit * d) + (rendUnit * 1.3);
+	const base = addVectors(rendCenter, polar2Vector(len, angle));
+	const point = addVectors(rendCenter, polar2Vector(len + (rendUnit * .2), angle));
+	if (type !== 2) {
+		c.moveTo(...base);
+		c.lineTo(...point);
+	}
+	if (type !== 1) {
+		c.moveTo(...addVectors(point, polar2Vector(arrowLength, angle - arrowAngle)));
+		c.lineTo(...point);
+		c.lineTo(...addVectors(point, polar2Vector(arrowLength, angle + arrowAngle)));
+	}
+	c.lineWidth = 4;
+	c.lineCap = 'round';
+	c.strokeStyle = color;
+	c.stroke();
+	c.restore();
+}
+
+function renderMountains(m, color) {
+	c.save();
+	c.beginPath();
+	c.moveTo(...w2s(m[0]));
+	for (let i = 0; i < m.length; i++) {
+		c.lineTo(...w2s(m[i]));
+	}
+	c.fillStyle = color;
+	c.fill();
+	c.restore();
+}
+
+// ----- Make Planet terrain -----
+
+function makeMountains(n = 1, da = .05) {
+	const m = []; // Mountains
+	let h = 0;
+	for (let a = 0; a <= TWO_PI; a += da) {
+		h = (h + rand(200) - rand(200) + rand(300 * n)) / 2;		
+		m.push(addVectors(PLANET_CENTER, polar2Vector(PLANET_RADIUS + h, a)));
+	}
+	return m;
+}
+
+const mts = makeMountains(1, .04); // Mountains
+const backMts = makeMountains(2, .02);
+
+// --------------------------- DRAW -----------------------------
+export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbows, rkt, options,
+	e, r, speed, alt
 ) => {
 	rt += dt;
 	// reset canvas
 	a.width ^= 0;
 
-	zoom = lerp(zoom, goalZoom, 0.5);
+	zoom = lerp(zoom, goalZoom, zoomSpeed);
+
+	// Get some values that are needed in a few places
+	const { v, com } = rkt.compound;
+	speed = magnitude(v);
+	const vectorToCenter = subtractVectors(PLANET_CENTER, com);
+	alt = magnitude(vectorToCenter) - PLANET_RADIUS; // altitude
+	
+	const shakePercent = clamp(1 - (alt / 600), 0, 1);
+	if (shakePercent) {
+		const screenShakeScale = rkt.lastAppliedEnginePower * 4 * shakePercent;
+		cam[X] += sin(rt) * screenShakeScale;
+		cam[Y] += cos(rt) * screenShakeScale / 2;
+	}
+
 
 	// Draw the planet's Sky
 	drawRadialGradient(
@@ -127,6 +215,10 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 		ATMOS_RADIUS
 	);
 
+	// Draw the planet's background montains
+	renderMountains(backMts, '#0213');
+	renderMountains(mts, '#355'); // 4ab
+
 	// Draw rainbows
 	for (let rb of rainbows) {
 		if (rb.w && rb.lft) {
@@ -149,6 +241,7 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 			c.lineWidth = rainbowWidth;
 			c.strokeStyle = grad;
 			c.stroke();
+			c.closePath();
 			c.restore();
 		}
 	}
@@ -215,9 +308,46 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 
 	// Draw objects within the physics sims
 	for (let sim of sims) {
+		const lineSize = 20;
+		// const vp = vector2Polar(v);
+		// const speed = magnitude(v);
+		// Loop over all shapes
+		for (e of sim.H) {
+			// Draw speed lines for all vertices in the rocket
+			if (e.e >= 0 && e.rocketPart && speed > 2) {
+				c.save();
+				c.beginPath();
+				// Loop over vertices
+				for (let i = 0; i < e.V.length; i++) {
+					c.moveTo(...w2s(e.V[i]));
+					c.lineTo(...w2s(addVectors(e.V[i], scale(v, -lineSize))));
+				}
+				const grad = c.createLinearGradient(
+					...w2s(addVectors(com, scale(v, lineSize))),
+					...w2s(addVectors(com, scale(v, -lineSize)))
+				);
+				[
+					[0, 'fff3'],
+					[1, 'fff0'],
+				].forEach(([n, rgb]) => grad.addColorStop(n, `#${rgb}`));
+				c.strokeStyle = grad;
+				c.lineWidth = 4;
+				c.closePath(),
+				c.fill(),
+				c.stroke();
+				c.restore();
+			}
+		}
 		// draw shapes
 		for (e of sim.H) {
 			if (e.e >= 0) {
+				if (e.rocketPart && e.damaged) {
+					// Smoke from damaged parts
+					if (rand() < 0.3) {
+						particles.new(rand(10), e.c, [randBell(.5), -.8, randBell(1)], 8, [55, 30, 30, 100], [35, 30, 30, 0]);
+						// TODO: Make this so it goes up regardless of where on the planet you are
+					}
+				}
 				// const color = sim.collisions?.[e.e] ? '#ccca' : e.d || '#fffc';
 				const color = e.color || '#eeef';
 				c.save(),
@@ -231,16 +361,26 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 					c.arc(0,0,e.w * zoom,0,7)
 					// c.lineTo(0,0) // <-- needed to visibly see rotations on circles
 				} else { // rectangle
-					c.fillStyle=color,
+					c.fillStyle = color,
 					c.moveTo(...w2s(e.V[0])),
-					c.lineTo(...w2s(e.V[1])),
-					c.lineTo(...w2s(e.V[2])),
-					c.lineTo(...w2s(e.V[3]))
+					[1,2,3].forEach(i=>c.lineTo(...w2s(e.V[i])));
+					// c.lineTo(...w2s(e.V[1])),
+					// c.lineTo(...w2s(e.V[2])),
+					// c.lineTo(...w2s(e.V[3]))
+					// c.moveTo(...w2s(e.V[0], e.rocketPart ? 1 : zoom)),
+					// c.lineTo(...w2s(e.V[1], e.rocketPart ? 1 : zoom)),
+					// c.lineTo(...w2s(e.V[2], e.rocketPart ? 1 : zoom)),
+					// c.lineTo(...w2s(e.V[3], e.rocketPart ? 1 : zoom))
 				}
 				
 				c.closePath(),
-				c.fill(),
-				c.stroke();
+				c.fill();
+				if (e.line) {
+					c.lineWidth = e.line[0];
+					c.strokeStyle = e.line[1];
+					c.stroke();
+				}
+				// c.stroke();
 				c.restore();
 
 				if (e.emoji) {
@@ -269,20 +409,22 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 
 	const now = new Date();
 	// drawText('🦄', cam);
-	missions.objs(o => {
-		if (o.completed && now - o.completed > 3e3) return;
-		// if (o.completed - now < 1) console.log(o.completed - now);
-		// const a = o.completed ? clamp(255 - (now - o.completed)/1000, 0, 255) : 255;
-		const color = o.completed ? '#595' : getRainbowGradient(
-			addVectors(o.pos, [-o.r, 0]),
-			addVectors(o.pos, [o.r, 0])
-		);
-		c.lineWidth = 8;
-		const r =  o.r + (o.completed ? 0 : (o.r * .05 * sin(rt / 200)));
-		drawCircle(o.pos, r, color, 0);
-		c.lineWidth = 6;
-		if (zoom > .07) drawText(o.completed ? '✅' : o.description, o.pos, color);
-	});
+	if (missions && missions.length) {
+		missions.objs(o => {
+			if (o.completed && now - o.completed > 3e3) return;
+			// if (o.completed - now < 1) console.log(o.completed - now);
+			// const a = o.completed ? clamp(255 - (now - o.completed)/1000, 0, 255) : 255;
+			const color = o.completed ? '#595' : getRainbowGradient(
+				addVectors(o.pos, [-o.r, 0]),
+				addVectors(o.pos, [o.r, 0])
+			);
+			c.lineWidth = 8;
+			const r =  o.r + (o.completed ? 0 : (o.r * .05 * sin(rt / 200)));
+			drawCircle(o.pos, r, color, 0);
+			c.lineWidth = 6;
+			if (zoom > .07) drawText(o.completed ? '✅' : o.description, o.pos, color);
+		});
+	}
 	
 	// trajectories.forEach(traj => traj.forEach(pos => {
 	// 	drawCircle(pos, 5, '#fff2');
@@ -305,41 +447,27 @@ export const draw = (dt, sims, particles, trajectories, missions, clouds, rainbo
 		c.closePath();
 	});
 
-	const rendUnit = avgRendDim / 4;
-	const rendCenter = [rendW, rendH];
-	function drawGuideLine(angle, dist, color) {
-		c.save();
-		c.beginPath();
-		// c.moveTo(rendW, rendH);
-		const d = clamp(dist, 0, 1);
-		const len = (rendUnit * d) + (rendUnit * 1.3);
-		c.moveTo(...addVectors(rendCenter, polar2Vector(len, angle)))
-		c.lineTo(...addVectors(rendCenter, polar2Vector(len + (rendUnit * .2), angle)));
-		c.lineWidth = 4;
-		c.lineCap = 'round';
-		c.strokeStyle = color;
-		c.stroke();
-		c.restore();
+	// Add engine lighting
+	if (rkt.lastAppliedEnginePower) {
+		const r = rkt.lastAppliedEnginePower * 400;
+		drawRadialGradient(rkt.nozzle.c, r, [[0, 'f503'], [.1, 'fcb3'], [1, 'ffb0']], rkt.nozzle.c, r);
 	}
 
-	{
-		const { v, com } = rkt.compound;
+	{ // Draw guidelines
 		const vp = vector2Polar(v);
-		const speed = magnitude(v);
 		if (speed > 1) {
-			drawGuideLine(vp.angle, 1, '#f9fc');
+			drawGuideLine(vp.angle, 1, '#fffc', 2);
 		}
-		const vectorToPlanet = vector2Polar(subtractVectors(PLANET_CENTER, com));
-		const height = vectorToPlanet.magnitude - PLANET_RADIUS;
-		if (height > 500) {
-			drawGuideLine(vectorToPlanet.angle, height / 500, '#3c36');
+		const vectorToPlanet = vector2Polar(vectorToCenter);
+		if (alt > 500) {
+			drawGuideLine(vectorToPlanet.angle, alt / 500, '#3a36', 3);
 		}
-		if (height > 500 || speed > 1) {
-			drawGuideLine(rkt.core.a - (PI/2), 1, '#3333');
-			const openObjectives = missions.current().objectives.filter(o => !o.completed);
+		if (alt > 500 || speed > 1) {
+			drawGuideLine(rkt.core.a - (PI/2), 1, '#f9fc', 1);
+			const openObjectives = missions.open?.() || [];
 			if (openObjectives.length) {
 				const diff = vector2Polar(subtractVectors(openObjectives[0].pos, com));
-				drawGuideLine(diff.angle, diff.magnitude / 100, '#ff0a');
+				drawGuideLine(diff.angle, diff.magnitude / 100, '#ff0a', 0);
 			}
 		}
 	}

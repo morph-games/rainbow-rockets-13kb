@@ -2,69 +2,58 @@ import { zzfx } from 'zzfx';
 
 import { simFactory, RECTANGLE, CIRCLE, SPRING, REPULSIVE, HINGE, FIXED } from './xem-physics-factory.js';
 import { particles } from './particles.js';
-import { draw, setCam, wheelZoom, incZoom, s2w, ROYGB } from './canvas-renderer.js';
+import { draw, setCam, wheelZoom, incZoom, getZoom, setZoom, ROYGB, setZoomSpeed } from './canvas-renderer.js';
 import {
-	PLANET_RADIUS, PLANET_CENTER, PLANET_MASS,
+	PLANET_RADIUS, PLANET_CENTER,
 	calcPressurePercentAtRadius,
 	setDampeningForPressure, calcAltitude, calcPlanetGravity,
 } from './planet.js';
-import { getCollisionsById } from './physics-extensions.js';
+import { checkCollisions, enableJoint, disableJoint, joinAnchors,
+	makeCompound,
+} from './physics-extensions.js';
 import {
-	setPos, subtractVectors, clamp, rand, 
+	setPos, subtractVectors, clamp, rand, lerp,
 	PI, X, Y, angle2Vector, distance, magnitude, TWO_PI, addVectors, polar2Vector,
-	randBell, scale, perpendicular,
+	scale, perpendicular,
 } from './utils.js';
 import { missions } from './missions.js';
 import { clouds } from './clouds.js';
 import { rainbows } from './rainbows.js';
 
-// ---------- World ----------
+// ---------- Sounds ----------
 
-zzfx(...[,,537,.02,.02,.22,1,1.59,-6.98,4.97]);
+const SOUNDS = [
+	[1,,507,.05,.19,.13,1,.7,-3,,-174,.17,,.4,,,.13,.8,.24,,958], // 0 = Refueling
+	[1,,329.6276,,.2,.4,4,,5,1,,,,1,,1.3,.43,.1,.2], // 1 = thrust
+	[1,,222,.02,.05,.07,3,.9,-6,-23,,,,.4,,,,.62,.08,,867], // 2 = reset
+	[,,97.99886,.02,.17,.09,3,3.5,10,49,,,,,,,.1,.56,.06], // 3 = objective complete
+	[1,,461,.01,.05,.02,1,2.3,-10,,,,,.2,18,.1,.18,.54,,,330], // 4 = bump
+	[2,,130.8128,.01,.17,.4,4,1.4,-6,,,,,1.7,,.6,.39,.5,.12], // 5 = explode
+];
+let soundOn = 1;
+function playSound(i, vol) {
+	const s = [...SOUNDS[i]];
+	if (soundOn && s) {
+		if (vol !== undefined) s[0] = vol;
+		zzfx(...s);
+	}
+}
+
+// ---------- World ----------
 
 const sims = [simFactory([0,0])]; // , simFactory()]; // You can have multiple simulations
 const s1 = sims[0];
 let look = [0, -PLANET_RADIUS];
 let lookCooldown = 0;
 setCam(look, true);
+let titleOn = 1;
+const TITLE_ZOOM = .019;
+setZoom(TITLE_ZOOM);
 // s1.G[Y] = 0; // 0.005;
 // const rect = (w, h, cx, cy, w, h, m) => s1.shape(RECTANGLE, [400, 700], 0, 800, 30),
 const rect = (x, y, w, h) => s1.shape(RECTANGLE, [x, y], w * h, w, h);
 const circle = (x, y, r) => s1.shape(CIRCLE, [x, y], PI * r * r, r);
-const addShape = (shapeConfig, comp) => {
-	const [w, h, offsetX = 0, offsetY = 0, type = RECTANGLE, options = {}] = shapeConfig;
-	const mass = w * h; // TODO: handle circles
-	comp.parts.push(
-		s1.shape(type, [comp.c[X] + offsetX, comp.c[Y] + offsetY], mass, w, h, options)
-	);
-};
-const makeCompound = (shapeConfigArr, cx, cy) => {
-	const comp = {
-		c: [cx, cy], // center position
-		parts: [],
-		com: [0, 0], // Center of mass
-		v: [0, 0], // Overall velocity
-		m: 0, // total mass
-		// calculate center of mass, overall velocity, and total mass
-		calc() {
-			const me = this;
-			// Get the total mass of all parts
-			me.m = me.parts.reduce((sum, p) => sum + p.m, 0);
-			me.com = [0, 0];
-			me.v = [0, 0];
-			// Calculate the center of mass and the average velocity of all parts
-			me.parts.forEach(p => {
-				const massPortion = p.m / me.m;
-				me.com[X] += p.c[X] * massPortion;
-				me.com[Y] += p.c[Y] * massPortion;
-				me.v[X] += p.v[X] * massPortion;
-				me.v[Y] += p.v[Y] * massPortion;
-			});
-		},
-	};
-	shapeConfigArr.forEach((config) => addShape(config, comp));
-	return comp;
-}
+
 
 // Keys by Xem - https://xem.github.io/articles/jsgamesinputs.html
 // u=r=d=l=0;
@@ -77,31 +66,68 @@ const lookAtObj = (i) => {
 
 // -------------------------- Interactions --------------------------------------------------------
 
+function setTimeZoom(arr) {
+	arr.forEach(([spd, wait]) => {
+		setTimeout(() => setZoomSpeed(spd), wait);
+	});
+}
+function turnTitleOff() {
+	titleOn = 0;
+	setZoomSpeed(.002);
+	setZoom(1, 1);
+	setTimeZoom([
+		[.005, 500],
+		[.01, 750],
+		[.05, 1e3],
+		[.1, 2e3],
+		[undefined, 6e3],
+	]);
+}
+function turnTitleOn() {
+	titleOn = 1;
+	setZoomSpeed(.1);
+	setZoom(TITLE_ZOOM, 1);
+}
+let kbOn = 1;
+let touchOn = 1;
 const commandQueue = [];
-const ks = {}; // { u: 0, r: 0, d: 0, l: 0, S: 0 };
-const kt = {
+// Maintain keys pressed down
+const ks = {}; // { u: 0, r: 0, d: 0, l: 0, S: 0 }; 
+const kt = { // Click events
 	'-': () => incZoom(-.1),
 	'=': () => incZoom(.1),
 	'+': () => incZoom(.1),
 	T: () => rocket.engineOn ^= 1, // Bitwise NOT operator to flip from 0 <-> 1
 	B: () => commandQueue.push('reset'),
+	r: () => commandQueue.push('reset'),
 	z: () => rocket.setThrottle(1),
 	x: () => rocket.setThrottle(0),
-	E: () => { if (missions.next()) { reset(); lookAtObj(0); } },
+	E: () => {
+		if (titleOn) turnTitleOff();
+		if (missions.next()) { reset(); lookAtObj(0); }
+	},
 	c: () => oc.classList.toggle('show'),
+	o: () => soundOn = !soundOn,
+	X: () => {
+		if (titleOn) turnTitleOff();
+		else turnTitleOn();
+	},
+	b: () => rocket.breakMe(),
+	f: () => commandQueue.push('fix'),
 };
 onkeydown = onkeyup = e => {
-	ks['BT***E**HC**************S****lurd************************l*cr************q*d***ux*z***'[e.which-8]]=e.type[5]?1:0;
+	ks['BT***E**HC*********X****S****luRd************************lbcR*f********o*qrd***ux*z***'[e.which-8]]=e.type[5]?1:0;
 	// ks[e.key]=e.type[5]?1:0;
 	if (e.which > 186) ks['+*-'[e.which-187]]=e.type[5]?1:0;
 	e.preventDefault()
 	Object.keys(kt).forEach(k => ks[k] && kt[k]?.());
 	// console.log(e.key, e.key.charCodeAt(), e.which, JSON.stringify(ks));
+	kbOn = 1;
 }
-// onkeydown = e => console.log(e, e.type[5], e.which);
-// onkeyup = e => console.log(e, e.type[5]);
 
 onclick=e=>{
+	kbOn = e.pointerType === 'mouse';
+	touchOn = e.pointerType === 'touch';
 	// if (Math.random() < 0.5) {
 	// 	rect(...s2w(e.pageX, e.pageY), 20, 20);
 	// } else {
@@ -114,26 +140,22 @@ onclick=e=>{
 	const objIndex = e.target?.dataset?.obj;
 	if (objIndex?.length) lookAtObj(Number(objIndex));
 	// console.log(e.target);
-	// s1.shape(CIRCLE, , 500, 10);
 };
-let clickedKey;
 const pinchEvents = [];
 let pinchPrevDiff = null;
+const getClickKey = e => e.target.nodeName === 'U' && e.target.dataset.key;
 onpointerdown=e=>{
-	const { nodeName, dataset } = e.target;
-	if (nodeName === 'U' && dataset.key) {
-		clickedKey = dataset.key;
-		ks[dataset.key] = 1;
-		console.log(ks);
+	const k = getClickKey(e);
+	if (k) {
+		ks[k] = 1;
 	} else {
 		pinchEvents.push(e); // For pinch-zoom
 	}
 };
 onpointerout = onpointercancel = onpointerleave = onpointerup = e => {
-	if (clickedKey) {
-		ks[clickedKey] = 0;
-		clickedKey = null;
-		console.log(ks);
+	const k = getClickKey(e);
+	if (k) {
+		ks[k] = 0;
 	}
 	{ // For pinch-zoom
 		// Remove this event from the target's cache
@@ -146,8 +168,7 @@ onpointerout = onpointercancel = onpointerleave = onpointerup = e => {
 	}
 };
 onpointermove = e => {
-	// This function implements a 2-pointer horizontal pinch/zoom gesture
-	// Find this event in the cache and update its record with this event
+	// 2-pointer horizontal pinch/zoom gesture - update pincheven with this event
 	const index = pinchEvents.findIndex(ev => ev.pointerId === e.pointerId);
 	pinchEvents[index] = e;
 	// If two pointers are down, check for pinch gestures
@@ -175,25 +196,27 @@ onwheel = (e) => { /* e.preventDefault(); */ wheelZoom(e.deltaY); }
 const planet = s1.shape(CIRCLE, PLANET_CENTER, 0, PLANET_RADIUS);
 planet.color = '#0000'; // Transparent - draw as a special thing in the renderer
 // Non-Physical Rectangles
-const npr = (x, y, w, h, em, ems) => {
+const npr = (x, y, w, h, em, ems, c, line) => {
 	const r = s1.shape(RECTANGLE, [x, y], 0, w, h);
 	r.f = 0.1;
 	r.emoji = em;
 	r.emojiSize = ems;
+	r.color = c;
+	if (line) r.line = line;
 	return r;
 };
-npr(0, -PLANET_RADIUS, 440, 40, '🚀Launchpad', 18); // Platform
-// npr(-14, -PLANET_RADIUS - 50, 10, 60);
-// npr(14, -PLANET_RADIUS - 50, 10, 60);
-npr(330, -PLANET_RADIUS - 110, 180, 250, '🦄HQ', 50); // Building
-npr(-1750, -PLANET_RADIUS + 140, 400, 160, '🌈', 50);
+npr(0, -PLANET_RADIUS, 440, 40, '🚀Launchpad', 18, '#aaa', [4, '#1113']); // Platform
+npr(330, -PLANET_RADIUS - 110, 180, 250, '🦄HQ', 50, '#ddd', [3, '#1113']); // Building
+npr(330, -PLANET_RADIUS - 245, 20, 20, '🏰', 70, '#ddd'); // Building
+npr(-340, -PLANET_RADIUS, 20, 20, '📡', 90, '#999'); // Dish
+npr(-1750, -PLANET_RADIUS + 140, 400, 160, '🌈 Generator', 42, '#aaa', [3, '#1113']);
 
-const LAUNCHPAD_RESET_POS = [0, -PLANET_RADIUS - 60];
+const LAUNCHPAD_RESET_POS = [0, -PLANET_RADIUS - 70];
 
 const MODE_NAMES = ['Burst', 'Sustained Burn'];
 const NOZ_H = 16;
 const rocket = {
-	compound: makeCompound(
+	compound: makeCompound(s1,
 		[
 			[8, 16], // nose cone
 			[16, 8], // probe core
@@ -205,8 +228,103 @@ const rocket = {
 		],
 		0, -PLANET_RADIUS * 1.1
 	),
+	joints: [],
+	assemble() {
+		const r = this;
+		// Give names for the various parts
+		['nose', 'core', 'body', 'engine', 'nozzle', 'landingR', 'landingL'].forEach((k, i) => {
+			r[k] = r.compound.parts[i];
+			r[k].partName = k;
+			r[k].line = [1, '#545'];
+		});
+		r.compound.parts.forEach(p => p.rocketPart = 1);
+
+		function rocketJoin(part1, part2, x1, y1, x2, y2, type, str, len) {
+			const { j } = joinAnchors(s1, r[part1], r[part2], x1, y1, x2, y2, type, str, len);
+			r.joints.push(j);
+		}
+
+		rocketJoin('nose', 'core', 0, 8, 0, -4);
+		rocketJoin('core', 'body', 0, 4, 0, -25);
+		rocketJoin('body', 'engine', 0, 25, 0, -8);
+		rocketJoin('engine', 'nozzle', 0, 8, 0, -7);
+		// rocketJoin('body', 'landingR', 8, 20, -3, -25);
+		// rocketJoin('body', 'landingL', -8, 20, 3, -25);
+		rocketJoin('body', 'landingR', 8, 20, -3, -25, HINGE);
+		rocketJoin('body', 'landingL', -8, 20, 3, -25, HINGE);
+		// rocketJoin('engine', 'landingR', 0, 0, 0, -10, REPULSIVE, .2, 15);
+		// rocketJoin('engine', 'landingR', 0, 0, 0, -10, SPRING, .2, 15);
+
+		rocketJoin('landingL', 'landingR', 0, 20, 0, 20, REPULSIVE, .2, 45);
+		rocketJoin('landingL', 'landingR', 0, 20, 0, 20, SPRING, 1, 35);
+
+		r.engine.color = '#ccc';
+		r.nozzle.color = '#bbb';
+		r.nose.color = '#fcf';
+		r.body.emoji = '🦄';
+	},
+	hasDamage() {
+		return this.compound.parts.reduce((bool, p) => bool || p.damaged, 0);
+	},
+	damage(part, pos) {
+		this.joints.forEach(j => {
+			if (j.A === part || j.B === part) {
+				if (!part.damaged) {
+					playSound(5);
+					part.F[X] += rand(-2, 2);
+					part.F[Y] += rand(-2, 2);
+					for (let i = 0; i < 10; i++) {
+						particles.new(.7, pos, [rand(-3, 3), rand(-3, 3), rand(-1, 1)], 4, [255, 150, 0, 100], [0, 0, 0, 0]);
+					}
+				}
+				disableJoint(s1, j);
+			}
+		});
+		if (['nozzle', 'engine', 'body'].includes(part.partName)) this.engineOn = 0;
+		part.damaged = 1;
+	},
+	breakMe() {
+		this.joints.forEach(j => {
+			j.A.damaged = 1;
+			j.B.damaged = 1;
+			disableJoint(s1, j);
+		});
+	},
+	halt() {
+		this.compound.parts.forEach(p => {
+			// Cut the velocity and angular velocity
+			p.v = [0, 0];
+			p.A = 0;
+		});
+	},
+	fixMe() {
+		this.halt();
+		this.joints.forEach(j => {
+			j.A.damaged = 0;
+			j.B.damaged = 0;
+			enableJoint(s1, j);
+		});
+	},
+	resetTo(pos) {
+		const offset = subtractVectors(pos, this.nozzle.c);
+		this.halt();
+		this.compound.parts.forEach(p => {
+			const desiredAngle = 0;
+			const da = desiredAngle - p.a; // Difference between desired angle and current angle (a)
+			// console.log(p.a, da);
+			// Note: transform only updates the geometry (vertices, etc),
+			// and not the rotation state (a)
+			s1.transform(p, offset, da);
+			// ...so we need to set the angle manually.
+			p.a = desiredAngle;
+		});
+		// This is kind of hacky - running the sim here and re-halting - but it appears to work
+		s1.run();
+		this.halt();
+		rocket.engineOn = 0;
+	},
 	gim: 0,
-	deltaGim: .01,
+	deltaGim: .02,
 	rotateLand() {
 		// TODO: Rotate the base of the rocket to the land
 	},
@@ -225,10 +343,14 @@ const rocket = {
 	fuel: 1e3,
 	maxFuel: 1e3,
 	setFuel(t) { this.fuel = clamp(t, 0, this.maxFuel);	},
-	refuel(dr) { this.setFuel(this.fuel + dr); },
+	refuel(dr) {
+		if (dr > 0) playSound(0)
+		this.setFuel(this.fuel + dr);
+	},
 	engineOn: 0,
 	enginePower: 0.4,
 	throttle: 1, // 0.4,
+	lastAppliedEnginePower: 0,
 	maxThrottle: 1,
 	setThrottle(t) { this.throttle = clamp(t, 0, this.maxThrottle);	},
 	increaseThrottle(dt) { this.setThrottle(this.throttle + dt); },
@@ -237,109 +359,58 @@ const rocket = {
 	},
 	applyThrust() {
 		this.refuel(-.3 * this.throttle);
-		if (this.fuel <= 0) return;
+		if (this.fuel <= 0) return 0;
 		const noz = this.nozzle;
 		const vec = angle2Vector(noz.a + this.gim - PI/2);
-		// console.log(noz.a, vec, this.gim);
-		// Old method involved applying to velocity
-		// noz.v[X] += vec[X] * this.throttle * this.enginePower;
-		// noz.v[Y] += vec[Y] * this.throttle * this.enginePower;
-		noz.F[X] = vec[X] * this.throttle * this.enginePower;
-		noz.F[Y] = vec[Y] * this.throttle * this.enginePower;
-		
-		if (rand() > this.throttle) return; // No particles
+		this.lastAppliedEnginePower = this.throttle * this.enginePower;
+		noz.F[X] = vec[X] * this.lastAppliedEnginePower;
+		noz.F[Y] = vec[Y] * this.lastAppliedEnginePower;
+
+		if (rand() > this.throttle) return 1; // No particles
+		const vol = clamp(this.throttle * getZoom() * .8, .5, 1.5);
+		playSound(1, vol);
+		const [comVX, comVY] = this.compound.v;
 		ROYGB.forEach((col, i) => {
 			const vel = [
-				rand(2) - 1 - vec[X] * 3,
-				rand(2) - 1 - vec[Y] * 3,
+				comVX + rand(2) - 1 - (vec[X] * 3),
+				comVY + rand(2) - 1 - (vec[Y] * 3),
 				rand(2) - 1
 			];
 			const p = addVectors(
 				addVectors(noz.c, scale(vec, -NOZ_H / 2)), // Bottom of nozzle
 				scale(perpendicular(vec), (i * -8) + 16)
 			);
-			
 			// particles.new(2, [p[X] + (i * 8) - 16, p[Y], 0], vel, 4, [...col, 255]);
-			particles.new(2, [...p, 0], vel, 4, [...col, 255]);
+			particles.new(2, [...p, 0], vel, 4, [...col, 255], [...col, 0]);
 		});
-		// particles.new(1, [noz.c[X] - 20, noz.c[Y], 0], vel, [255, 0, 0, 255]);
-		// particles.new(1, [noz.c[X] - 10, noz.c[Y], 0], vel, [255, 100, 0, 255]);
-		// particles.new(1, [noz.c[X] + 0, noz.c[Y], 0], vel, [255, 255, 0, 255]);
-		// particles.new(1, [noz.c[X] + 10, noz.c[Y], 0], vel, [0, 255, 0, 255]);
-		// particles.new(1, [noz.c[X] + 20, noz.c[Y], 0], vel, [0, 0, 255, 255]);
+		return 1;
 	},
 	run(t) {
 		this.compound.parts.forEach((s) => setDampeningForPressure(s));
 		if (this.throttle && this.engineOn) this.applyThrust();
 		if (this.gimbalCooldown > 0) this.gimbalCooldown -= t;
 		else this.gimbal(this.gim > 0 ? -2 : 2);
+		this.lastAppliedEnginePower = lerp(this.lastAppliedEnginePower, 0, 0.1);
+		if (this.lastAppliedEnginePower < .01) this.lastAppliedEnginePower = 0;
 	},
 };
-const { parts } = rocket.compound;
-rocket.nose = parts[0];
-rocket.core = parts[1];
-rocket.body = parts[2];
-rocket.engine = parts[3];
-rocket.nozzle = parts[4];
-rocket.landingR = parts[5];
-rocket.landingL = parts[6];
-// rocket.body.m /= 3;
-// rocket.body.f /= 10;
-// rocket.nozzle = rocket.compound.parts[2];
 
-const join = (part1, part2, offset1X = 0, offset1Y = 0, offset2X = 0, offset2Y = 0, type = FIXED, str, len) => {
-	const a1 = s1.anchor(part1, [offset1X, offset1Y]);
-	const a2 = s1.anchor(part2, [offset2X, offset2Y]);
-	const j = s1.joint(type, part1, a1, part2, a2, str, len);
-	return { a1, a2, j };
-};
-// const a1 = s1.anchor(rocket.compound.parts[0], [0, 25]);
-// const a2 = s1.anchor(rocket.compound.parts[1], [0, -8]);
-// s1.joint(FIXED, rocket.compound.parts[0], a1, rocket.compound.parts[1], a2);
+rocket.assemble();
+let invuln = 1;
+function makeInvuln() {
+	invuln = 1;
+	setTimeout(() => invuln = 0, 2e3);
+}
 
-join(rocket.nose, rocket.core, 0, 8, 0, -4);
-join(rocket.core, rocket.body, 0, 4, 0, -25);
-join(rocket.body, rocket.engine, 0, 25, 0, -8);
-join(rocket.engine, rocket.nozzle, 0, 8, 0, -7);
-// join(rocket.body, rocket.landingR, 8, 20, -3, -25);
-// join(rocket.body, rocket.landingL, -8, 20, 3, -25);
-join(rocket.body, rocket.landingR, 8, 20, -3, -25, HINGE);
-join(rocket.body, rocket.landingL, -8, 20, 3, -25, HINGE);
-// join(rocket.engine, rocket.landingR, 0, 0, 0, -10, REPULSIVE, .2, 15);
-// join(rocket.engine, rocket.landingR, 0, 0, 0, -10, SPRING, .2, 15);
-
-join(rocket.landingL, rocket.landingR, 0, 20, 0, 20, REPULSIVE, .2, 45);
-join(rocket.landingL, rocket.landingR, 0, 20, 0, 20, SPRING, 1, 35);
-
-// rocket.landingR.a += .4;
-// rocket.landingL.a -= .4;
-rocket.engine.color = '#ccc';
-rocket.nozzle.color = '#bbb';
-rocket.body.emoji = '🦄';
-
-const reset = () => {
+const reset = (stay) => {
+	playSound(2);
 	missions.reset();
-	const offset = subtractVectors(LAUNCHPAD_RESET_POS, rocket.nozzle.c);
-	rocket.compound.parts.forEach(p => {
-		const desiredAngle = 0;
-		const da = desiredAngle - p.a; // Difference between desired angle and current angle (a)
-		// console.log(p.a, da);
-		// Note: transform only updates the geometry (vertices, etc),
-		// and not the rotation state (a)
-		s1.transform(p, offset, da);
-		// ...so we need to set the angle manually.
-		p.a = desiredAngle;
-		// Also let's cut the velocity and angular velocity
-		p.v = [0, 0];
-		p.A = 0;
-	});
-	rocket.engineOn = 0;
-	rocket.refuel(1e6);
-	// rocket.compound.parts.forEach(p => {
-	// 	s1.transform(p, offset, 0);
-	// });
-	// s1.transform(rocket.body, [0, 0], 0);
-	// setPos(rocket.body.c, LAUNCHPAD_RESET_POS);
+	makeInvuln();
+	rocket.fixMe();
+	if (!stay) {
+		rocket.resetTo(LAUNCHPAD_RESET_POS);
+		rocket.refuel(1e6);
+	}
 };
 reset();
 
@@ -378,12 +449,14 @@ let trajectory = [];
 const DT = 16;
 setInterval(() => {
 	if (commandQueue.length) {
-		if (commandQueue.shift() === 'reset') reset();
+		const cmd = commandQueue.shift();
+		if (cmd === 'reset') reset();
+		if (cmd === 'fix') reset(true);
 	}
 	// if (ks.d) rocket.nozzle.v[Y] -= .3;
 	if (ks.d) rocket.rotateLand();
 	if (ks.l) rocket.rotate(-1);
-	if (ks.r) rocket.rotate(1);
+	if (ks.R) rocket.rotate(1);
 	if (ks.u) rocket.thrust();
 	if (ks.z) rocket.setThrottle(rocket.maxThrottle);
 	if (ks.x) rocket.setThrottle(0);
@@ -391,7 +464,7 @@ setInterval(() => {
 	if (ks.C) rocket.increaseThrottle(-.008); // Ctrl
 	// if (ks.S) rocket.nextStage(); // Space
 
-	// FIXME: Update gravity for particles
+	// TODO: Update gravity for particles
 	particles.run();
 	let rda = clouds.run(DT, rocket);
 	for (let sim of sims) {
@@ -402,34 +475,38 @@ setInterval(() => {
 			setPos(o.g, addVectors(o.g, o.F));
 		}
 		sim.run();
-		sim.collisions = getCollisionsById(sim);
+		// sim.collisions = getCollisionsById(sim);
+		// console.log(sim.collisions);
+		if (!invuln) checkCollisions(sim, 160, (shape, mani, ii) => {
+			// Ignore rocket parts hitting themselves because this happens during assembly, and
+			// when the landing gear swings
+			if (mani.A.rocketPart && mani.B.rocketPart) return;
+			if (shape.rocketPart) {
+				rocket.damage(shape, mani.c);
+			} else {
+				playSound(4);
+			}
+			// console.log('Collision', ii, mani);
+		});
 	}
+	// TODO: If any rocket parts are colliding, then play a noise:
+	// zzfx(...[2.3,,461,.01,.05,.02,1,2.3,-10,,,,,.2,18,.1,.18,.54,,,330]);
 	rocket.run(DT);
 	rocket.compound.calc();
 	trajectory = calcTrajectory(rocket.compound);
 	rainbows.run(DT, rocket, rda);
 
-	// { // Check rainbow
-	// 	const rainbow = rainbows[0];
-	// 	const { com } = rocket.compound;
-	// 	rainbow.c = polar2Vector(rainbow.mag, rainbow.angle);
-	// 	const d = distance(com, rainbow.c);
-	// 	if (Math.abs(d - rainbow.r) <= (rainbow.w/2)) {
-	// 		rocket.refuel(3);
-	// 		if (rand() < .1) {
-	// 			ROYGB.forEach((col, i) => {
-	// 				const c = addVectors(com, polar2Vector(rainbow.w, rand(TWO_PI)));
-	// 				const vel = scale(subtractVectors(c, com), -.015);
-	// 				particles.new(1, [...c, -20], [...vel, 1], 4, [...col, 100]);
-	// 			});
-	// 		}
-	// 	}
-	// }
-
-	// console.log(rocket.body.c[0], rocket.body.c[1]);
-	// console.log(sim1.M().length, sims[1].M().length);
-	// if (sims[1].M().length) console.log(sims[1].M())
-	missions.check(rocket);
+	const newCompleted = missions.check(rocket);
+	if (newCompleted.length > 0) {
+		playSound(3);
+		const o = newCompleted[0];
+		// Confetti if we just completed a mission
+		for (let i = 0; i < 100; i++) {
+			const pos = addVectors(o.pos, polar2Vector(o.r, rand(TWO_PI)));
+			const v = scale(subtractVectors(pos, o.pos), .02 + rand(.05));
+			particles.new(.8, [...pos, 0], [...v, .5], 8, [155, 255, 0, 255], [85, 153, 85, 0]);
+		}
+	}
 	if (lookCooldown <= 0) look = [...rocket.body.c];
 	lookCooldown -= DT;
 }, DT);
@@ -437,11 +514,21 @@ setInterval(() => {
 const $ = id => document.getElementById(id);
 const setHTML = (el, html) => el.innerHTML !== html && (el.innerHTML = html);
 const setText = (el, txt) => el.innerText !== txt && (el.innerText = txt);
+const cl = document.body.classList;
 
 const render = () => {
 	setCam(look, lookCooldown < -2e3);
 	const speed = magnitude(rocket.compound.v);
-	draw(DT, sims, particles, speed < .1 ? [] : [trajectory], missions, clouds, rainbows, rocket);
+	draw(
+		DT, sims,
+		particles,
+		speed < .1 ? [] : [trajectory],
+		titleOn ? [] : missions,
+		clouds,
+		rainbows,
+		rocket,
+		{ screenShake: 1 },
+	);
 	// ^ TODO: make the delta-t based on time elapsed since last render
 	const alt = calcPartsAltitude(rocket.compound.parts);
 	// altn.innerText = alt.toFixed(0).padStart(6, '0');
@@ -453,13 +540,17 @@ const render = () => {
 	atmos.value = calcPressurePercentAtRadius(alt + PLANET_RADIUS);
 	flp.value = rocket.fuel;
 	flp.max = rocket.maxFuel;
+	msnreset.classList.toggle('show', rocket.hasDamage());
+	msndone.classList.toggle('show', missions.completed() >= 1);
 	setText(msnnum, missions.index + 1);
 	setText(msntot, missions.length);
 	setHTML(
 		msnos,
 		missions.current().objectives.map((o, i) => '<li data-obj="' + i + '">' + (o.completed ? '✅' : '') + (o.description || 'Do thing') + '</li>').join('')
 	);
-	setHTML(msndone, missions.completed() >= 1 ? '<u data-key="E">Next mission [Enter]</u>' : '');
+	cl.toggle('ui', !titleOn);
+	cl.toggle('kb', kbOn);
+	cl.toggle('touch', touchOn);
 	requestAnimationFrame(render);
 };
 

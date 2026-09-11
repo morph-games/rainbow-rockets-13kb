@@ -26,10 +26,11 @@ export const missions = [
 			{
 				...enterZoneType,
 				pos: [100, -PLANET_RADIUS - 700],
+				description: 'Fly up higher',
 			},
 			{
 				...enterZoneType,
-				pos: [-120, -PLANET_RADIUS],
+				pos: [-130, -PLANET_RADIUS - 20],
 				description: 'Land here',
 				r: 80,
 			},
@@ -87,9 +88,18 @@ missions.next = () => {
 };
 missions.current = () => missions[missions.index];
 missions.objs = (cb) => missions.current().objectives.forEach(cb);
-missions.check = (rkt) => missions.objs(o => {
-	if (!o.completed && o.check(rkt)) o.completed = new Date();
-});
+// missions.check = (rkt) => missions.objs(o => {
+// 	if (!o.completed && o.check(rkt)) o.completed = new Date();
+// });
+missions.check = (rkt) => missions.open().reduce((completed, o) => {
+	if (o.check(rkt)) {
+		o.completed = new Date();
+		completed.push(o);
+	}
+	return completed;
+}, []);
 missions.reset = () => missions.objs(o => o.completed = 0);
 missions.completed = () => missions.current().objectives.reduce((sum, o) => sum + (o.completed ? 1 : 0), 0)
 	/ missions.current().objectives.length;
+// Get all the open objectives for the current mission
+missions.open = () => missions.current().objectives.filter(o => !o.completed)
