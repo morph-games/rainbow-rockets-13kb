@@ -1,16 +1,16 @@
 {
-  "name": "jsk13k-physics",
+  "name": "rainbow-rockets-13kb",
   "version": "1.0.0",
-  "description": "",
+  "description": "A 2d Rocketry game featuring the Unicorn Space Program",
   "main": "index.js",
   "scripts": {
     "serve": "vite dev",
     "preview": "vite preview",
     "build": "vite build --base=./"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["game", "js13k", "rockets", "space"],
+  "author": "Luke Nickerson",
+  "license": "UNLICENSED",
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
