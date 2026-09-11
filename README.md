@@ -28,7 +28,7 @@ Controls:
 
 ## Size
 
-* Zipped: 13,081 bytes (12.7 KB)
+* Zipped: 13,079 bytes (12.7 KB)
 * Unzipped and unminified source: ~57 KB
 
 
