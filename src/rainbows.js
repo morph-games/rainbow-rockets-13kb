@@ -1,4 +1,4 @@
-import { PI, addVectors, scale, subtractVectors, polar2Vector, distance, rand, round, TWO_PI, vector2Polar } from './utils.js';
+import { PI, addVectors, scale, subtractVectors, polar2Vector, distance, rand, round, TWO_PI, vector2Polar, abs } from './utils.js';
 import { PLANET_RADIUS } from './planet.js';
 import { particles } from './particles.js';
 import { ROYGB } from './canvas-renderer.js';
@@ -21,7 +21,7 @@ rainbows.run = (dt, rkt, rainDoneAngle) => {
 		rb.lft -= dt;
 		if (rb.lft < 2e3) rb.w -= (dt * RB_W) / 2e3;
 		const d = distance(com, rb.c);
-		if (Math.abs(d - rb.r) <= (rb.w/2)) {
+		if (abs(d - rb.r) <= (rb.w/2)) {
 			rkt.refuel(3);
 			if (rand() < .1) {
 				ROYGB.forEach((col, i) => {

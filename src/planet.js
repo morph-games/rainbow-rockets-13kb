@@ -11,10 +11,16 @@ export const PLANET_MASS = PLANET_RADIUS * PLANET_RADIUS * PI / 20;
 export const calcAltitude = (r) => r - PLANET_RADIUS;
 // Pressure should be near zero above the atmosphere radius, and go to 1 at planet radius
 export const calcPressurePercentAtRadius = (r) => clamp(Math.E ** (-(calcAltitude(r)) / ATMOS_SCALE_HEIGHT));
-export const calcDampening = (pos) => .99 + (1 - calcPressurePercentAtRadius(distance(pos, PLANET_CENTER))) * .0099;
+export const calcDampening = (pos) => (
+	// Base dampening (lower than 1 -> more dampening)
+	.994
+	// As your pressure decreases, increase the dampening
+	// eventually getting to a total of .9999
+	+ (1 - calcPressurePercentAtRadius(distance(pos, PLANET_CENTER))) * .0059
+);
 export const setDampeningForPressure = (shape) => shape.dm = calcDampening(shape.c);
 
-const GRAV = 0.002;
+const GRAV = 0.0029;
 const gravForce = (m1, [x1, y1], m2, [x2, y2]) => {
 	const dx = x2 - x1,
 		dy = y2 - y1,

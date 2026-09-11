@@ -1,4 +1,4 @@
-export const { sin, cos, hypot, min, max, PI, random, round, floor, atan2 } = Math;
+export const { sin, cos, hypot, min, max, PI, random, round, floor, atan2, abs } = Math;
 export const X = 0, Y = 1;
 export const TWO_PI = PI * 2;
 export const colorTo255 = (color) => color.map(n => round(n * 255));
@@ -8,7 +8,7 @@ export const color255ToHex = (color) => {
 	return `#${color.map(n=>(floor(Number(n))).toString(16).padStart(2, '0')).join('')}`;
 };
 export const clamp = (n, minA = 0, maxB = 1) => min(max(n, minA), maxB);
-export const lerp = (start, end, t) => start * (1 - t) + end * t;
+export const lerp = (start, end, t = .1) => start * (1 - t) + end * t;
 export const angle2Vector = (a) => [cos(a), sin(a)];
 export const vectorAngle = ([x, y]) => atan2(y, x);
 export const magnitude = ([x, y]) => hypot(x, y); // aka. length
