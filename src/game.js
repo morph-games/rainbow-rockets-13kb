@@ -116,7 +116,7 @@ const kt = { // Click events
 	f: () => commandQueue.push('fix'),
 };
 onkeydown = onkeyup = e => {
-	ks['BT***E**HC*********X****S****luRd************************lbcR*f********o*qrd***ux*z***'[e.which-8]]=e.type[5]?1:0;
+	ks['BT***E**HC*********X****S****LURD************************LbcR*f********o*qrD***Ux*z***'[e.which-8]]=e.type[5]?1:0;
 	// ks[e.key]=e.type[5]?1:0;
 	if (e.which > 186) ks['+*-'[e.which-187]]=e.type[5]?1:0;
 	e.preventDefault()
@@ -454,10 +454,10 @@ setInterval(() => {
 		if (cmd === 'fix') reset(true);
 	}
 	// if (ks.d) rocket.nozzle.v[Y] -= .3;
-	if (ks.d) rocket.rotateLand();
-	if (ks.l) rocket.rotate(-1);
+	// if (ks.D) rocket.rotateLand(); // TODO
+	if (ks.L) rocket.rotate(-1);
 	if (ks.R) rocket.rotate(1);
-	if (ks.u) rocket.thrust();
+	if (ks.U) rocket.thrust();
 	if (ks.z) rocket.setThrottle(rocket.maxThrottle);
 	if (ks.x) rocket.setThrottle(0);
 	if (ks.H) rocket.increaseThrottle(.008); // Shift
