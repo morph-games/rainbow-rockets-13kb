@@ -1,3 +1,5 @@
+import { lerp } from './utils.js';
+
 const PARTICLE_MAX = 10000;
 const NUMBERS_PER_PARTICLE = 16;
 const INDEX_MAX = PARTICLE_MAX * NUMBERS_PER_PARTICLE;
@@ -8,6 +10,7 @@ export const particles = {
 	// 1 number for time left
 	// 3 numbers for position
 	// 3 numbers for velocity
+	// 1 number for radius
 	// 4 numbers for color
 	// 4 number for goal color
 
@@ -17,13 +20,13 @@ export const particles = {
 		let i = 0, u = 0, p = this.particles;
 		for (; i < INDEX_MAX; i += NUMBERS_PER_PARTICLE) {
 			// if (p[i] > 0) console.log('\t', i, p.slice(i, i + NUMBERS_PER_PARTICLE - 1));
-			if (fn(i, ...p.slice(i, i + NUMBERS_PER_PARTICLE - 1))) return i;
+			if (fn(i, ...p.slice(i, i + NUMBERS_PER_PARTICLE))) return i;
 		}
 	},
 	run(dt = 16) {
 		this.count = 0;
 		let p = this.particles;
-		this.ea((i, tLeft, x, y, z, vX, vY, vZ) => {
+		this.ea((i, tLeft, x, y, z, vX, vY, vZ, r, cr, cg, cb, ca, gcr, gcg, gcb, gca) => {
 			if (tLeft <= 0) return;
 			this.count++;
 			// console.log({ x, y, z, vX, vY, vZ });
@@ -33,11 +36,21 @@ export const particles = {
 				x + gx + vX,
 				y + gy + vY,
 				z + gz + vZ,
+				// r,
+				// lerp(cr, gcr),
 			], i);
+			p.set([
+				lerp(cr, gcr, .01),
+				lerp(cg, gcg, .01),
+				lerp(cb, gcb, .01),
+				lerp(ca, gca, .01),
+			], i + 8)
+			// TODO: ^ This could be improved if we maintained the initial lifetime amount
+			// so we would lerp over the full lifetime of the particle
 		});
 		// console.log(this.count);
 	},
-	new(lifeTime, pos, vel, radius, color, goalColor) {
+	new(lifeTime, posP, vel, radius, color, goalColor) {
 		const now = new Date();
 		// console.log(now - this.lastParticle);
 		// if (now - this.lastParticle < 16) return;
@@ -46,6 +59,7 @@ export const particles = {
 		// if undefined then overwrite the first slot (later we could make this more sophisticated
 		// by overwriting the closest particle to dead, but that might have performance implications)
 		const i = this.ea((i, tLeft) => tLeft <= 0) || 0;
+		const pos = posP.length === 2 ? [...posP, 0] : posP;
 		if (pos.length !== 3 || vel.length !== 3 || color.length !== 4) {
 			console.error('Invalid particle params', arguments);
 			return;
